@@ -390,9 +390,36 @@
             gap: 1.25rem;
         }
 
+        .charts-row-equal {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.25rem;
+        }
+
         @media (max-width: 1024px) {
-            .charts-row {
+            .charts-row, .charts-row-equal {
                 grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .charts-row, .charts-row-equal {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+            .chart-card {
+                padding: 1rem;
+                overflow: hidden;
+                box-sizing: border-box;
+                width: 100%;
+            }
+            .chart-body {
+                min-height: 320px;
+                max-width: 100%;
+                overflow: hidden;
+            }
+            .chart-card canvas, .chart-card svg {
+                max-width: 100% !important;
             }
         }
 
@@ -998,13 +1025,13 @@
                         <span class="kpi-title">En Çok Satan Aktivite</span>
                         <div class="kpi-icon" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;"><i class="fa-solid fa-trophy"></i></div>
                     </div>
-                    <div class="kpi-value text-num" style="font-size: 1.05rem; line-height: 1.3;" id="act-kpi-top">-</div>
+                    <div class="kpi-value text-num" style="font-size: 0.95rem; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="act-kpi-top">-</div>
                     <div class="kpi-footer" id="act-kpi-top-revenue">€0.00 gelir</div>
                 </div>
             </div>
 
             <!-- Charts Row for Activities -->
-            <div class="charts-row">
+            <div class="charts-row-equal">
                 <div class="chart-card">
                     <div class="chart-header">
                         <h3 class="chart-title"><i class="fa-solid fa-chart-column" style="color: #06b6d4;"></i> Ay Ay Su Sporları &amp; Aktivite Gelir Trendi</h3>
@@ -1012,13 +1039,11 @@
                     <div class="chart-body" id="actMonthlyChart"></div>
                 </div>
 
-                <div class="right-charts-col">
-                    <div class="chart-card">
-                        <div class="chart-header">
-                            <h3 class="chart-title"><i class="fa-solid fa-chart-pie" style="color: #8b5cf6;"></i> Aktivite Ürün Dağılımı</h3>
-                        </div>
-                        <div class="chart-body" style="height: 350px; width: 100%;" id="actProductChart"></div>
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3 class="chart-title"><i class="fa-solid fa-chart-bar" style="color: #8b5cf6;"></i> Aktivite Ürün Dağılımı</h3>
                     </div>
+                    <div class="chart-body" style="height: 350px; width: 100%;" id="actProductChart"></div>
                 </div>
             </div>
 
@@ -1284,14 +1309,14 @@
                     if (allActivityData && allActivityData.products) {
                         renderActProductChart(allActivityData.products);
                     }
-                    if (actProductChartObj && actProductChartObj.resize) actProductChartObj.resize();
+                    if (actProductChartObj && actProductChartObj.windowResize) actProductChartObj.windowResize();
                 }
             }, 100);
         }
 
         window.addEventListener('resize', () => {
             if (deptChartObj && deptChartObj.resize) deptChartObj.resize();
-            if (actProductChartObj && actProductChartObj.resize) actProductChartObj.resize();
+            if (actProductChartObj && actProductChartObj.windowResize) actProductChartObj.windowResize();
         });
 
         // Show/Hide Loader
@@ -1671,12 +1696,27 @@
             const chartDom = document.getElementById('deptChart');
             if (!chartDom) return;
             
-            if (!deptChartObj) {
-                deptChartObj = echarts.init(chartDom, 'dark');
-            }
+            if (chartDom.clientWidth === 0) return;
             
-            const data = departments.map(d => ({ value: d.revenue, name: d.department }));
-            const totalSum = departments.reduce((acc, d) => acc + (d.revenue || 0), 0);
+            if (deptChartObj) {
+                deptChartObj.dispose();
+                deptChartObj = null;
+            }
+
+            const activeDepts = (departments || []).filter(d => (d.revenue || 0) > 0);
+            if (activeDepts.length === 0) {
+                chartDom.innerHTML = `<div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100%; color:#9ca3af; font-size:13px; font-weight:500; gap:8px;">
+                    <i class="fa-solid fa-chart-pie" style="font-size:24px; color:#4b5563;"></i>
+                    <span>Seçilen tarihte departman satışı bulunmamaktadır.</span>
+                </div>`;
+                return;
+            }
+
+            deptChartObj = echarts.init(chartDom, 'dark');
+            
+            const isMobile = window.innerWidth <= 768;
+            const data = activeDepts.map(d => ({ value: d.revenue, name: d.department }));
+            const totalSum = activeDepts.reduce((acc, d) => acc + (d.revenue || 0), 0);
             
             const option = {
                 backgroundColor: 'transparent',
@@ -1696,22 +1736,27 @@
                     text: 'Toplam Gelir',
                     subtext: '€' + Math.round(totalSum).toLocaleString('en-US'),
                     left: 'center',
-                    top: '38%',
-                    textStyle: { fontSize: 12, color: '#9ca3af', fontWeight: 'normal' },
-                    subtextStyle: { fontSize: 22, color: '#ffffff', fontWeight: 'bold' }
+                    top: isMobile ? '35%' : '38%',
+                    textStyle: { fontSize: isMobile ? 11 : 12, color: '#9ca3af', fontWeight: 'normal' },
+                    subtextStyle: { fontSize: isMobile ? 20 : 24, color: '#ffffff', fontWeight: 'bold' }
                 },
                 legend: {
                     type: 'scroll',
-                    bottom: '0%',
+                    orient: 'horizontal',
                     left: 'center',
-                    textStyle: { color: '#9ca3af', fontSize: 11 },
+                    bottom: 0,
+                    height: 25,
+                    textStyle: { color: '#9ca3af', fontSize: 10 },
+                    pageIconColor: '#06b6d4',
+                    pageIconInactiveColor: '#4b5563',
+                    pageTextStyle: { color: '#9ca3af' },
                     icon: 'circle'
                 },
                 series: [{
                     name: 'Departman',
                     type: 'pie',
-                    radius: ['50%', '72%'],
-                    center: ['50%', '45%'],
+                    radius: isMobile ? ['42%', '65%'] : ['55%', '82%'],
+                    center: ['50%', '42%'],
                     avoidLabelOverlap: true,
                     itemStyle: { borderRadius: 6, borderColor: '#0b0f19', borderWidth: 2 },
                     color: ['#f59e0b', '#8b5cf6', '#10b981', '#06b6d4', '#ec4899', '#3b82f6'],
@@ -1719,10 +1764,18 @@
                     labelLine: { show: false },
                     emphasis: {
                         scale: true,
-                        scaleSize: 8,
+                        scaleSize: 6,
                         itemStyle: {
                             shadowBlur: 12,
                             shadowColor: 'rgba(0, 0, 0, 0.6)'
+                        }
+                    },
+                    data: data
+                }]
+            };
+            
+            deptChartObj.setOption(option);
+        }wColor: 'rgba(0, 0, 0, 0.6)'
                         }
                     },
                     data: data
@@ -2026,7 +2079,9 @@
             document.getElementById('act-kpi-checks').innerText = kpis.total_checks.toLocaleString('tr-TR');
             
             if (products.length > 0) {
-                document.getElementById('act-kpi-top').innerText = products[0].product_name;
+                const topEl = document.getElementById('act-kpi-top');
+                topEl.innerText = products[0].product_name;
+                topEl.title = products[0].product_name;
                 document.getElementById('act-kpi-top-revenue').innerText = '€' + products[0].revenue_eur.toLocaleString('en-US', { minimumFractionDigits: 2 }) + ' (' + products[0].qty + ' adet)';
             } else {
                 document.getElementById('act-kpi-top').innerText = '-';
@@ -2187,88 +2242,120 @@
             }
         }
 
-        // Render Product Activity Chart
+        // Render Product Activity Chart (Horizontal Bar Chart)
         function renderActProductChart(products) {
-            const chartDom = document.getElementById('actProductChart');
-            if (!chartDom || !products) return;
-            chartDom.style.height = '350px';
-            chartDom.style.width = '100%';
-            
-            if (!actProductChartObj) {
-                actProductChartObj = echarts.init(chartDom, 'dark');
+            const chartDom = document.querySelector('#actProductChart');
+            if (!chartDom) return;
+
+            if (actProductChartObj && actProductChartObj.destroy) {
+                actProductChartObj.destroy();
+                actProductChartObj = null;
             }
-            
-            const topProducts = products.slice(0, 8);
-            const data = topProducts.map(p => ({ value: p.revenue_eur, name: p.product_name }));
-            const totalSum = products.reduce((acc, p) => acc + (p.revenue_eur || 0), 0);
-            
-            const option = {
-                backgroundColor: 'transparent',
-                tooltip: {
-                    trigger: 'item',
-                    backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                    borderColor: 'rgba(255, 255, 255, 0.1)',
-                    padding: [8, 12],
-                    textStyle: { color: '#ffffff', fontSize: 12 },
-                    formatter: function(params) {
-                        return `<div style="font-weight:700; color:#38bdf8; margin-bottom:4px;">${params.name}</div>` +
-                               `<div>Gelir: <b style="color:#ffffff;">€${params.value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b></div>` +
-                               `<div>Oran: <b style="color:#10b981;">%${params.percent.toFixed(1)}</b></div>`;
-                    }
-                },
-                title: {
-                    text: 'Toplam Gelir',
-                    subtext: '€' + Math.round(totalSum).toLocaleString('en-US'),
-                    left: 'center',
-                    top: '38%',
-                    textStyle: { fontSize: 12, color: '#9ca3af', fontWeight: 'normal' },
-                    subtextStyle: { fontSize: 22, color: '#ffffff', fontWeight: 'bold' }
-                },
-                legend: {
-                    type: 'scroll',
-                    bottom: '0%',
-                    left: 'center',
-                    textStyle: { color: '#9ca3af', fontSize: 11 },
-                    icon: 'circle'
-                },
+
+            const activeProducts = (products || []).filter(p => (p.revenue_eur || 0) > 0);
+            if (activeProducts.length === 0) {
+                chartDom.innerHTML = `<div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100%; color:#9ca3af; font-size:13px; font-weight:500; gap:8px;">
+                    <i class="fa-solid fa-chart-bar" style="font-size:24px; color:#4b5563;"></i>
+                    <span>Seçilen tarihte aktivite satışı bulunmamaktadır.</span>
+                </div>`;
+                return;
+            }
+
+            chartDom.innerHTML = '';
+
+            const isMobile = window.innerWidth <= 768;
+            const sortedProducts = activeProducts.sort((a, b) => (b.revenue_eur || 0) - (a.revenue_eur || 0));
+            const topProducts = sortedProducts.slice(0, 8);
+
+            const zeroData = topProducts.map(() => 0);
+            const realData = topProducts.map(p => Math.round(p.revenue_eur || 0));
+
+            const options = {
                 series: [{
-                    name: 'Aktivite',
-                    type: 'pie',
-                    radius: ['50%', '72%'],
-                    center: ['50%', '45%'],
-                    avoidLabelOverlap: true,
-                    itemStyle: { borderRadius: 6, borderColor: '#0b0f19', borderWidth: 2 },
-                    color: ['#06b6d4', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#3b82f6', '#14b8a6', '#a855f7'],
-                    label: { show: false },
-                    labelLine: { show: false },
-                    emphasis: {
-                        scale: true,
-                        scaleSize: 8,
-                        itemStyle: {
-                            shadowBlur: 12,
-                            shadowColor: 'rgba(0, 0, 0, 0.6)'
+                    name: 'Gelir (€)',
+                    data: zeroData
+                }],
+                chart: {
+                    type: 'bar',
+                    height: isMobile ? 320 : 350,
+                    toolbar: { show: false },
+                    animations: {
+                        enabled: true,
+                        easing: 'easeinout',
+                        speed: 800,
+                        dynamicAnimation: {
+                            enabled: true,
+                            speed: 600
                         }
+                    }
+                },
+                plotOptions: {
+                    bar: {
+                        horizontal: true,
+                        barHeight: isMobile ? '58%' : '52%',
+                        borderRadius: 4,
+                        distributed: true,
+                        dataLabels: {
+                            position: 'top'
+                        }
+                    }
+                },
+                colors: ['#06b6d4', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#3b82f6', '#14b8a6', '#a855f7'],
+                dataLabels: {
+                    enabled: true,
+                    style: {
+                        colors: ['#ffffff'],
+                        fontSize: isMobile ? '10px' : '11px',
+                        fontFamily: 'Inter, sans-serif',
+                        fontWeight: 700
                     },
-                    data: data
-                }]
+                    formatter: function(val) {
+                        return val > 0 ? '€' + val.toLocaleString('en-US') : '';
+                    },
+                    offsetX: 10
+                },
+                xaxis: {
+                    categories: topProducts.map(p => p.product_name),
+                    labels: {
+                        show: true,
+                        style: { colors: '#9ca3af', fontSize: '9px' },
+                        formatter: (v) => '€' + v.toLocaleString()
+                    },
+                    axisBorder: { show: false }
+                },
+                yaxis: {
+                    labels: {
+                        show: true,
+                        style: { colors: '#e2e8f0', fontSize: isMobile ? '10px' : '11px', fontWeight: 600 },
+                        maxWidth: isMobile ? 120 : 240
+                    }
+                },
+                grid: {
+                    borderColor: 'rgba(255, 255, 255, 0.05)',
+                    strokeDashArray: 3,
+                    padding: { left: 5, right: 15 }
+                },
+                legend: { show: false },
+                tooltip: {
+                    theme: 'dark',
+                    y: {
+                        formatter: function(val) {
+                            return '€' + val.toLocaleString('en-US', { minimumFractionDigits: 2 });
+                        }
+                    }
+                }
             };
-            
-            actProductChartObj.setOption(option);
-            
-            actProductChartObj.off('legendselectchanged');
-            actProductChartObj.on('legendselectchanged', function (params) {
-                const selectedMap = params.selected;
-                let newSum = 0;
-                data.forEach(item => {
-                    if (selectedMap[item.name] !== false) {
-                        newSum += (item.value || 0);
+
+            actProductChartObj = new ApexCharts(chartDom, options);
+            actProductChartObj.render().then(() => {
+                setTimeout(() => {
+                    if (actProductChartObj && actProductChartObj.updateSeries) {
+                        actProductChartObj.updateSeries([{
+                            name: 'Gelir (€)',
+                            data: realData
+                        }]);
                     }
-                });
-                actProductChartObj.setOption({
-                    title: {
-                        subtext: '€' + Math.round(newSum).toLocaleString('en-US')
-                    }
-                });
+                }, 80);
             });
         }
 
