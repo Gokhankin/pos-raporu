@@ -1223,13 +1223,20 @@
         }
 
         // App Initialisation
-        window.addEventListener('DOMContentLoaded', () => {
+        function initApp() {
             initDefaultDates();
             checkStatus();
             fetchData();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initApp);
+        } else {
+            initApp();
+        }
             
-            // Set up event listeners
-            document.getElementById('btnRefresh').addEventListener('click', fetchData);
+        // Set up event listeners
+        document.getElementById('btnRefresh').addEventListener('click', fetchData);
             
             // Quick Month Select Listener
             document.getElementById('quickMonthSelect').addEventListener('change', function() {
@@ -1282,7 +1289,6 @@
                     fetchTransactions();
                 }, 400);
             });
-        });
 
         // Switch Tabs
         function switchTab(tabId) {
@@ -1768,14 +1774,6 @@
                         itemStyle: {
                             shadowBlur: 12,
                             shadowColor: 'rgba(0, 0, 0, 0.6)'
-                        }
-                    },
-                    data: data
-                }]
-            };
-            
-            deptChartObj.setOption(option);
-        }wColor: 'rgba(0, 0, 0, 0.6)'
                         }
                     },
                     data: data
