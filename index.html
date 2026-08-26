@@ -12,6 +12,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- ApexCharts CDN -->
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <!-- ECharts CDN for Pie Charts with Leader Lines -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <!-- SheetJS for Excel Export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
@@ -752,6 +754,20 @@
             text-align: right;
         }
 
+        .total-badge {
+            text-align: center;
+            padding: 10px 16px;
+            margin-top: 10px;
+            background: rgba(59, 130, 246, 0.08);
+            border: 1px solid rgba(59, 130, 246, 0.25);
+            border-radius: var(--radius-md);
+            font-family: var(--font-display);
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #60a5fa;
+            letter-spacing: 0.5px;
+        }
+
         /* Empty state */
         .empty-state {
             display: flex;
@@ -806,16 +822,16 @@
                     <option value="season">☀️ Tüm Sezon (May - Ekim)</option>
                     <option value="2026-05">Mayıs 2026</option>
                     <option value="2026-06">Haziran 2026</option>
-                    <option value="2026-07" selected>Temmuz 2026</option>
-                    <option value="2026-08">Ağustos 2026</option>
+                    <option value="2026-07">Temmuz 2026</option>
+                    <option value="2026-08" selected>Ağustos 2026</option>
                     <option value="2026-09">Eylül 2026</option>
                     <option value="2026-10">Ekim 2026</option>
                 </select>
                 <label>Başlangıç</label>
-                <input type="date" id="startDate" class="date-input" value="2026-07-01">
+                <input type="date" id="startDate" class="date-input" value="2026-08-01">
                 <div style="width: 1px; height: 16px; background: var(--border-color);"></div>
                 <label>Bitiş</label>
-                <input type="date" id="endDate" class="date-input" value="2026-07-31">
+                <input type="date" id="endDate" class="date-input" value="2026-08-31">
             </div>
 
             <button id="btnRefresh" class="btn-refresh">
@@ -890,7 +906,7 @@
                         <div class="chart-header">
                             <h3 class="chart-title"><i class="fa-solid fa-chart-pie"></i> Departman Dağılımı</h3>
                         </div>
-                        <div class="chart-body" style="min-height: 250px;" id="deptChart"></div>
+                        <div class="chart-body" style="height: 350px; width: 100%;" id="deptChart"></div>
                     </div>
                 </div>
             </div>
@@ -1001,7 +1017,7 @@
                         <div class="chart-header">
                             <h3 class="chart-title"><i class="fa-solid fa-chart-pie" style="color: #8b5cf6;"></i> Aktivite Ürün Dağılımı</h3>
                         </div>
-                        <div class="chart-body" style="min-height: 380px; display: flex; align-items: center; justify-content: center;" id="actProductChart"></div>
+                        <div class="chart-body" style="height: 350px; width: 100%;" id="actProductChart"></div>
                     </div>
                 </div>
             </div>
@@ -1151,8 +1167,39 @@
         let allForecastData = [];
         let allActivityData = null;
 
+        function initDefaultDates() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            
+            const firstDay = `${year}-${month}-01`;
+            const lastDayObj = new Date(year, now.getMonth() + 1, 0);
+            const lastDayStr = String(lastDayObj.getDate()).padStart(2, '0');
+            const lastDay = `${year}-${month}-${lastDayStr}`;
+            
+            const sInput = document.getElementById('startDate');
+            const eInput = document.getElementById('endDate');
+            if (sInput) sInput.value = firstDay;
+            if (eInput) eInput.value = lastDay;
+            
+            const qSelect = document.getElementById('quickMonthSelect');
+            if (qSelect) {
+                const ymVal = `${year}-${month}`;
+                let found = false;
+                for (let i = 0; i < qSelect.options.length; i++) {
+                    if (qSelect.options[i].value === ymVal) {
+                        qSelect.selectedIndex = i;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) qSelect.value = 'custom';
+            }
+        }
+
         // App Initialisation
         window.addEventListener('DOMContentLoaded', () => {
+            initDefaultDates();
             checkStatus();
             fetchData();
             
@@ -1224,20 +1271,28 @@
             const targetContent = document.getElementById(`tab-${tabId}`);
             if (targetContent) targetContent.classList.add('active');
             
-            // Redraw ApexCharts to fix display width bugs in hidden tabs
+            // Redraw Charts to fix display width bugs in hidden tabs
             setTimeout(() => {
                 if (tabId === 'dashboard') {
                     if (trendChartObj) trendChartObj.windowResize();
-                    if (deptChartObj) deptChartObj.windowResize();
+                    if (deptChartObj && deptChartObj.resize) deptChartObj.resize();
                     if (catChartObj) catChartObj.windowResize();
                 } else if (tabId === 'forecast') {
                     if (occPosChartObj) occPosChartObj.windowResize();
                 } else if (tabId === 'activities') {
                     if (actMonthlyChartObj) actMonthlyChartObj.windowResize();
-                    if (actProductChartObj) actProductChartObj.windowResize();
+                    if (allActivityData && allActivityData.products) {
+                        renderActProductChart(allActivityData.products);
+                    }
+                    if (actProductChartObj && actProductChartObj.resize) actProductChartObj.resize();
                 }
             }, 100);
         }
+
+        window.addEventListener('resize', () => {
+            if (deptChartObj && deptChartObj.resize) deptChartObj.resize();
+            if (actProductChartObj && actProductChartObj.resize) actProductChartObj.resize();
+        });
 
         // Show/Hide Loader
         function showLoader(text = "Veriler sorgulanıyor, lütfen bekleyin...") {
@@ -1613,66 +1668,84 @@
         }
 
         function renderDeptChart(departments) {
-            const labels = departments.map(d => d.department);
-            const series = departments.map(d => d.revenue);
+            const chartDom = document.getElementById('deptChart');
+            if (!chartDom) return;
             
-            const options = {
-                series: series,
-                chart: {
-                    height: 280,
-                    type: 'donut',
-                    background: 'transparent',
-                    foreColor: '#9ca3af'
-                },
-                labels: labels,
-                colors: ['#f59e0b', '#8b5cf6', '#10b981', '#06b6d4', '#ec4899', '#3b82f6'],
-                theme: { mode: 'dark' },
-                stroke: { show: false },
-                fill: { opacity: 0.95 },
-                legend: {
-                    position: 'bottom',
-                    fontSize: '12px',
-                    markers: { radius: 12 }
-                },
-                plotOptions: {
-                    pie: {
-                        donut: {
-                            size: '72%',
-                            labels: {
-                                show: true,
-                                name: { fontSize: '14px', fontFamily: 'Outfit', fontWeight: 600 },
-                                value: {
-                                    fontSize: '22px',
-                                    fontFamily: 'Outfit',
-                                    fontWeight: 700,
-                                    color: '#ffffff',
-                                    formatter: (val) => '€' + parseFloat(val).toLocaleString('en-US', {maximumFractionDigits: 0})
-                                },
-                                total: {
-                                    show: true,
-                                    label: 'Toplam Gelir',
-                                    fontSize: '11px',
-                                    color: '#9ca3af',
-                                    formatter: function (w) {
-                                        const sum = w.globals.seriesTotals.reduce((a, b) => a + b, 0);
-                                        return '€' + sum.toLocaleString('en-US', {maximumFractionDigits: 0});
-                                    }
-                                }
-                            }
-                        }
+            if (!deptChartObj) {
+                deptChartObj = echarts.init(chartDom, 'dark');
+            }
+            
+            const data = departments.map(d => ({ value: d.revenue, name: d.department }));
+            const totalSum = departments.reduce((acc, d) => acc + (d.revenue || 0), 0);
+            
+            const option = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'item',
+                    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                    borderColor: 'rgba(255, 255, 255, 0.1)',
+                    padding: [8, 12],
+                    textStyle: { color: '#ffffff', fontSize: 12 },
+                    formatter: function(params) {
+                        return `<div style="font-weight:700; color:#38bdf8; margin-bottom:4px;">${params.name}</div>` +
+                               `<div>Gelir: <b style="color:#ffffff;">€${params.value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b></div>` +
+                               `<div>Oran: <b style="color:#10b981;">%${params.percent.toFixed(1)}</b></div>`;
                     }
                 },
-                tooltip: {
-                    y: { formatter: (val) => '€' + val.toLocaleString('en-US', {minimumFractionDigits: 2}) }
-                }
+                title: {
+                    text: 'Toplam Gelir',
+                    subtext: '€' + Math.round(totalSum).toLocaleString('en-US'),
+                    left: 'center',
+                    top: '38%',
+                    textStyle: { fontSize: 12, color: '#9ca3af', fontWeight: 'normal' },
+                    subtextStyle: { fontSize: 22, color: '#ffffff', fontWeight: 'bold' }
+                },
+                legend: {
+                    type: 'scroll',
+                    bottom: '0%',
+                    left: 'center',
+                    textStyle: { color: '#9ca3af', fontSize: 11 },
+                    icon: 'circle'
+                },
+                series: [{
+                    name: 'Departman',
+                    type: 'pie',
+                    radius: ['50%', '72%'],
+                    center: ['50%', '45%'],
+                    avoidLabelOverlap: true,
+                    itemStyle: { borderRadius: 6, borderColor: '#0b0f19', borderWidth: 2 },
+                    color: ['#f59e0b', '#8b5cf6', '#10b981', '#06b6d4', '#ec4899', '#3b82f6'],
+                    label: { show: false },
+                    labelLine: { show: false },
+                    emphasis: {
+                        scale: true,
+                        scaleSize: 8,
+                        itemStyle: {
+                            shadowBlur: 12,
+                            shadowColor: 'rgba(0, 0, 0, 0.6)'
+                        }
+                    },
+                    data: data
+                }]
             };
-
-            if (deptChartObj) {
-                deptChartObj.updateOptions(options);
-            } else {
-                deptChartObj = new ApexCharts(document.querySelector("#deptChart"), options);
-                deptChartObj.render();
-            }
+            
+            deptChartObj.setOption(option);
+            
+            deptChartObj.off('legendselectchanged');
+            deptChartObj.on('legendselectchanged', function (params) {
+                const selectedMap = params.selected;
+                let newSum = 0;
+                data.forEach(item => {
+                    if (selectedMap[item.name] !== false) {
+                        newSum += (item.value || 0);
+                    }
+                });
+                deptChartObj.setOption({
+                    title: {
+                        subtext: '€' + Math.round(newSum).toLocaleString('en-US')
+                    }
+                });
+            });
         }
 
         function renderCategoryChart(categories) {
@@ -2047,7 +2120,7 @@
             
             const options = {
                 series: [
-                    { name: 'Aktivite Geliri (€)', type: 'column', data: revenues },
+                    { name: 'Aktivite Geliri (€)', type: 'area', data: revenues },
                     { name: 'Satılan Adet', type: 'line', data: quantities }
                 ],
                 chart: {
@@ -2058,7 +2131,23 @@
                     foreColor: '#9ca3af'
                 },
                 colors: ['#06b6d4', '#10b981'],
-                stroke: { width: [0, 3], curve: 'smooth' },
+                stroke: { width: [3, 3], curve: 'smooth' },
+                fill: {
+                    type: ['gradient', 'solid'],
+                    gradient: {
+                        shade: 'dark',
+                        type: 'vertical',
+                        shadeIntensity: 0.5,
+                        opacityFrom: 0.45,
+                        opacityTo: 0.05,
+                        stops: [0, 100]
+                    }
+                },
+                markers: {
+                    size: 6,
+                    strokeWidth: 2,
+                    hover: { size: 8 }
+                },
                 theme: { mode: 'dark' },
                 grid: {
                     borderColor: 'rgba(255, 255, 255, 0.05)',
@@ -2068,12 +2157,12 @@
                 yaxis: [
                     {
                         title: { text: 'Gelir (€)', style: { color: '#06b6d4', fontWeight: 600 } },
-                        labels: { formatter: (val) => '€' + val.toFixed(0) }
+                        labels: { formatter: (val) => '€' + (val !== undefined ? val.toLocaleString('en-US', {maximumFractionDigits: 0}) : 0) }
                     },
                     {
                         opposite: true,
                         title: { text: 'Miktar (Adet)', style: { color: '#10b981', fontWeight: 600 } },
-                        labels: { formatter: (val) => val.toFixed(0) }
+                        labels: { formatter: (val) => val !== undefined ? val.toLocaleString('tr-TR') : 0 }
                     }
                 ],
                 tooltip: {
@@ -2082,7 +2171,7 @@
                     y: {
                         formatter: function (y, { seriesIndex }) {
                             if (typeof y !== "undefined") {
-                                return seriesIndex === 0 ? `€${y.toLocaleString('en-US', {minimumFractionDigits: 2})}` : `${y.toLocaleString('tr-TR')} Adet`;
+                                return seriesIndex === 0 ? `€${y.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : `${y.toLocaleString('tr-TR')} Adet`;
                             }
                             return y;
                         }
@@ -2100,89 +2189,87 @@
 
         // Render Product Activity Chart
         function renderActProductChart(products) {
-            const topProducts = products.slice(0, 8);
-            const labels = topProducts.map(p => p.product_name);
-            const revenues = topProducts.map(p => p.revenue_eur);
+            const chartDom = document.getElementById('actProductChart');
+            if (!chartDom || !products) return;
+            chartDom.style.height = '350px';
+            chartDom.style.width = '100%';
             
-            const options = {
-                series: revenues,
-                chart: {
-                    height: 380,
-                    type: 'donut',
-                    background: 'transparent',
-                    foreColor: '#9ca3af'
-                },
-                labels: labels,
-                colors: ['#06b6d4', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#3b82f6', '#14b8a6', '#a855f7'],
-                theme: { mode: 'dark' },
-                stroke: { show: true, colors: ['#0b0f19'], width: 2 },
-                dataLabels: {
-                    enabled: true,
-                    style: {
-                        fontSize: '11px',
-                        fontFamily: 'Outfit',
-                        fontWeight: '700'
-                    },
-                    dropShadow: { enabled: false }
-                },
-                legend: {
-                    position: 'bottom',
-                    fontSize: '12px',
-                    fontFamily: 'Plus Jakarta Sans',
-                    fontWeight: 500,
-                    markers: { width: 10, height: 10, radius: 4 },
-                    itemMargin: { horizontal: 8, vertical: 4 }
-                },
-                plotOptions: {
-                    pie: {
-                        donut: {
-                            size: '65%',
-                            labels: {
-                                show: true,
-                                name: {
-                                    show: true,
-                                    fontSize: '13px',
-                                    fontFamily: 'Outfit',
-                                    color: '#9ca3af',
-                                    offsetY: -5
-                                },
-                                value: {
-                                    show: true,
-                                    fontSize: '24px',
-                                    fontFamily: 'Outfit',
-                                    fontWeight: 800,
-                                    color: '#ffffff',
-                                    offsetY: 5,
-                                    formatter: (val) => '€' + parseFloat(val).toLocaleString('en-US', {maximumFractionDigits: 0})
-                                },
-                                total: {
-                                    show: true,
-                                    showAlways: true,
-                                    label: 'Toplam Gelir',
-                                    fontSize: '12px',
-                                    fontFamily: 'Plus Jakarta Sans',
-                                    fontWeight: 600,
-                                    color: '#9ca3af',
-                                    formatter: function (w) {
-                                        const sum = w.globals.seriesTotals.reduce((a, b) => a + b, 0);
-                                        return '€' + sum.toLocaleString('en-US', {maximumFractionDigits: 0});
-                                    }
-                                }
-                            }
-                        }
+            if (!actProductChartObj) {
+                actProductChartObj = echarts.init(chartDom, 'dark');
+            }
+            
+            const topProducts = products.slice(0, 8);
+            const data = topProducts.map(p => ({ value: p.revenue_eur, name: p.product_name }));
+            const totalSum = products.reduce((acc, p) => acc + (p.revenue_eur || 0), 0);
+            
+            const option = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'item',
+                    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                    borderColor: 'rgba(255, 255, 255, 0.1)',
+                    padding: [8, 12],
+                    textStyle: { color: '#ffffff', fontSize: 12 },
+                    formatter: function(params) {
+                        return `<div style="font-weight:700; color:#38bdf8; margin-bottom:4px;">${params.name}</div>` +
+                               `<div>Gelir: <b style="color:#ffffff;">€${params.value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b></div>` +
+                               `<div>Oran: <b style="color:#10b981;">%${params.percent.toFixed(1)}</b></div>`;
                     }
                 },
-                tooltip: {
-                    y: { formatter: (val) => '€' + val.toLocaleString('en-US', {minimumFractionDigits: 2}) }
-                }
+                title: {
+                    text: 'Toplam Gelir',
+                    subtext: '€' + Math.round(totalSum).toLocaleString('en-US'),
+                    left: 'center',
+                    top: '38%',
+                    textStyle: { fontSize: 12, color: '#9ca3af', fontWeight: 'normal' },
+                    subtextStyle: { fontSize: 22, color: '#ffffff', fontWeight: 'bold' }
+                },
+                legend: {
+                    type: 'scroll',
+                    bottom: '0%',
+                    left: 'center',
+                    textStyle: { color: '#9ca3af', fontSize: 11 },
+                    icon: 'circle'
+                },
+                series: [{
+                    name: 'Aktivite',
+                    type: 'pie',
+                    radius: ['50%', '72%'],
+                    center: ['50%', '45%'],
+                    avoidLabelOverlap: true,
+                    itemStyle: { borderRadius: 6, borderColor: '#0b0f19', borderWidth: 2 },
+                    color: ['#06b6d4', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#3b82f6', '#14b8a6', '#a855f7'],
+                    label: { show: false },
+                    labelLine: { show: false },
+                    emphasis: {
+                        scale: true,
+                        scaleSize: 8,
+                        itemStyle: {
+                            shadowBlur: 12,
+                            shadowColor: 'rgba(0, 0, 0, 0.6)'
+                        }
+                    },
+                    data: data
+                }]
             };
             
-            if (actProductChartObj) {
-                actProductChartObj.updateOptions(options);
-            } else {
-                actProductChartObj = new ApexCharts(document.querySelector("#actProductChart"), options);
-                actProductChartObj.render();
-            }
+            actProductChartObj.setOption(option);
+            
+            actProductChartObj.off('legendselectchanged');
+            actProductChartObj.on('legendselectchanged', function (params) {
+                const selectedMap = params.selected;
+                let newSum = 0;
+                data.forEach(item => {
+                    if (selectedMap[item.name] !== false) {
+                        newSum += (item.value || 0);
+                    }
+                });
+                actProductChartObj.setOption({
+                    title: {
+                        subtext: '€' + Math.round(newSum).toLocaleString('en-US')
+                    }
+                });
+            });
         }
 
         // Export Activity Monthly Table to Excel
