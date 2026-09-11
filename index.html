@@ -1228,6 +1228,7 @@
             initDefaultDates();
             checkStatus();
             fetchData();
+            preloadMonths();
         }
 
         if (document.readyState === 'loading') {
@@ -1237,7 +1238,7 @@
         }
             
         // Set up event listeners
-        document.getElementById('btnRefresh').addEventListener('click', fetchData);
+        document.getElementById('btnRefresh').addEventListener('click', () => fetchData(true));
             
             // Quick Month Select Listener
             document.getElementById('quickMonthSelect').addEventListener('change', function() {
@@ -1367,31 +1368,79 @@
             }
         }
 
-        // Fetch All Data
-        async function fetchData() {
-            showLoader("Veriler yükleniyor...");
+        // Client-side in-memory cache
+        const clientCache = new Map();
+
+        async function cachedFetch(url, useCache = true) {
+            if (useCache && clientCache.has(url)) {
+                return clientCache.get(url);
+            }
+            const res = await fetch(url);
+            const data = await res.json();
+            if (!data.error) {
+                clientCache.set(url, data);
+            }
+            return data;
+        }
+
+        function preloadMonths() {
+            const months = [
+                { start: '2026-09-01', end: '2026-09-30' },
+                { start: '2026-08-01', end: '2026-08-31' },
+                { start: '2026-07-01', end: '2026-07-31' },
+                { start: '2026-06-01', end: '2026-06-30' },
+                { start: '2026-05-01', end: '2026-10-31' }
+            ];
+            
+            setTimeout(() => {
+                months.forEach((m, idx) => {
+                    setTimeout(() => {
+                        cachedFetch(`/api/pos-summary?start=${m.start}&end=${m.end}`);
+                        cachedFetch(`/api/pos-forecast?start=${m.start}&end=${m.end}`);
+                        cachedFetch(`/api/pos-activities?start=${m.start}&end=${m.end}`);
+                        cachedFetch(`/api/pos-transactions?start=${m.start}&end=${m.end}&department=&category=&search=&page=1&limit=100`);
+                    }, idx * 400);
+                });
+            }, 1200);
+        }
+
+        // Fetch All Data (Instant if cached)
+        async function fetchData(forceRefresh = false) {
+            const start = document.getElementById('startDate').value;
+            const end = document.getElementById('endDate').value;
+            const summaryUrl = `/api/pos-summary?start=${start}&end=${end}${forceRefresh ? '&force=1' : ''}`;
+            
+            if (forceRefresh) {
+                clientCache.clear();
+            }
+
+            // Only show loader if data is not already cached
+            const isCached = !forceRefresh && clientCache.has(summaryUrl);
+            if (!isCached) {
+                showLoader("Veriler yükleniyor...");
+            }
             checkStatus();
             
             try {
-                await fetchSummary();
+                await fetchSummary(forceRefresh);
             } catch (e) {
                 console.error("Fetch summary error:", e);
             } finally {
                 hideLoader();
             }
 
-            fetchForecast().catch(e => console.warn("Forecast fetch error:", e));
-            fetchActivities().catch(e => console.warn("Activities fetch error:", e));
-            fetchTransactions().catch(e => console.warn("Transactions fetch error:", e));
+            fetchForecast(forceRefresh).catch(e => console.warn("Forecast fetch error:", e));
+            fetchActivities(forceRefresh).catch(e => console.warn("Activities fetch error:", e));
+            fetchTransactions(forceRefresh).catch(e => console.warn("Transactions fetch error:", e));
         }
 
         // Fetch Summary & Load Dashboard Charts
-        async function fetchSummary() {
+        async function fetchSummary(forceRefresh = false) {
             const start = document.getElementById('startDate').value;
             const end = document.getElementById('endDate').value;
+            const url = `/api/pos-summary?start=${start}&end=${end}${forceRefresh ? '&force=1' : ''}`;
             
-            const response = await fetch(`/api/pos-summary?start=${start}&end=${end}`);
-            const data = await response.json();
+            const data = await cachedFetch(url, !forceRefresh);
             
             if (data.error) {
                 throw new Error(data.error);
@@ -1416,12 +1465,12 @@
         }
 
         // Fetch Forecast & Load Correlation
-        async function fetchForecast() {
+        async function fetchForecast(forceRefresh = false) {
             const start = document.getElementById('startDate').value;
             const end = document.getElementById('endDate').value;
             
-            const response = await fetch(`/api/pos-forecast?start=${start}&end=${end}`);
-            allForecastData = await response.json();
+            const url = `/api/pos-forecast?start=${start}&end=${end}${forceRefresh ? '&force=1' : ''}`;
+            allForecastData = await cachedFetch(url, !forceRefresh);
             
             if (allForecastData.error) {
                 throw new Error(allForecastData.error);
@@ -1467,15 +1516,15 @@
         }
 
         // Fetch Detailed Transactions (Paginated)
-        async function fetchTransactions() {
+        async function fetchTransactions(forceRefresh = false) {
             const start = document.getElementById('startDate').value;
             const end = document.getElementById('endDate').value;
             const dept = document.getElementById('filterDept').value;
             const cat = document.getElementById('filterCat').value;
             const search = document.getElementById('txSearch').value;
             
-            const response = await fetch(`/api/pos-transactions?start=${start}&end=${end}&department=${encodeURIComponent(dept)}&category=${encodeURIComponent(cat)}&search=${encodeURIComponent(search)}&page=${txCurrentPage}&limit=${txPageLimit}`);
-            const data = await response.json();
+            const url = `/api/pos-transactions?start=${start}&end=${end}&department=${encodeURIComponent(dept)}&category=${encodeURIComponent(cat)}&search=${encodeURIComponent(search)}&page=${txCurrentPage}&limit=${txPageLimit}${forceRefresh ? '&force=1' : ''}`;
+            const data = await cachedFetch(url, !forceRefresh);
             
             if (data.error) {
                 throw new Error(data.error);
@@ -2076,12 +2125,12 @@
             }
         }
         // Fetch Activities & Load Activity Dashboard
-        async function fetchActivities() {
+        async function fetchActivities(forceRefresh = false) {
             const start = document.getElementById('startDate').value;
             const end = document.getElementById('endDate').value;
             
-            const response = await fetch(`/api/pos-activities?start=${start}&end=${end}`);
-            allActivityData = await response.json();
+            const url = `/api/pos-activities?start=${start}&end=${end}${forceRefresh ? '&force=1' : ''}`;
+            allActivityData = await cachedFetch(url, !forceRefresh);
             
             if (allActivityData.error) {
                 throw new Error(allActivityData.error);

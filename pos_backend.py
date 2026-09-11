@@ -1,5 +1,7 @@
 import os
 import logging
+import time
+from threading import Lock
 from collections import defaultdict
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
@@ -42,6 +44,27 @@ except Exception as e:
                 continue
         return None
 
+# In-Memory Cache (TTL = 300s / 5 minutes)
+API_CACHE = {}
+CACHE_LOCK = Lock()
+CACHE_TTL = 300
+
+def get_from_cache(key):
+    now = time.time()
+    with CACHE_LOCK:
+        if key in API_CACHE:
+            ts, val = API_CACHE[key]
+            if now - ts < CACHE_TTL:
+                return val
+            else:
+                del API_CACHE[key]
+    return None
+
+def set_to_cache(key, val):
+    now = time.time()
+    with CACHE_LOCK:
+        API_CACHE[key] = (now, val)
+
 def format_date_sql(date_str, default_val="", is_end=False):
     d_str = date_str if date_str else default_val
     if not d_str:
@@ -75,10 +98,24 @@ def get_status():
         "server": server_ip
     })
 
+@app.route('/api/clear-cache')
+def clear_cache():
+    with CACHE_LOCK:
+        API_CACHE.clear()
+    return jsonify({"status": "cache cleared"})
+
 @app.route('/api/pos-summary')
 def get_pos_summary():
     start_raw = request.args.get("start", "2026-06-01")
     end_raw = request.args.get("end", "2026-06-30")
+    force = request.args.get("force", "0") == "1"
+    
+    cache_key = f"summary_{start_raw}_{end_raw}"
+    if not force:
+        cached = get_from_cache(cache_key)
+        if cached:
+            return jsonify(cached)
+            
     start_date = format_date_sql(start_raw, "2026-06-01")
     end_date = format_date_sql(end_raw, "2026-06-30", is_end=True)
     
@@ -208,12 +245,15 @@ def get_pos_summary():
         trend = [{"date": str(r[0]), "qty": float(r[1] or 0), "revenue": round(float(r[2] or 0), 2)} for r in cur.fetchall()]
         
         conn.close()
-        return jsonify({
+        
+        res = {
             "kpis": kpis,
             "departments": departs,
             "categories": categories,
             "trend": trend
-        })
+        }
+        set_to_cache(cache_key, res)
+        return jsonify(res)
         
     except Exception as e:
         log.error(f"Summary API Error: {e}")
@@ -224,18 +264,25 @@ def get_pos_summary():
 def get_pos_transactions():
     start_raw = request.args.get("start", "2026-06-01")
     end_raw = request.args.get("end", "2026-06-30")
-    start_date = format_date_sql(start_raw, "2026-06-01")
-    end_date = format_date_sql(end_raw, "2026-06-30", is_end=True)
     depart = request.args.get("department", "")
     category = request.args.get("category", "")
     search_val = request.args.get("search", "").strip()
+    force = request.args.get("force", "0") == "1"
     
-    # Pagination
     try:
         page = int(request.args.get("page", 1))
         limit = int(request.args.get("limit", 100))
     except ValueError:
         page, limit = 1, 100
+
+    cache_key = f"tx_{start_raw}_{end_raw}_{depart}_{category}_{search_val}_{page}_{limit}"
+    if not force:
+        cached = get_from_cache(cache_key)
+        if cached:
+            return jsonify(cached)
+            
+    start_date = format_date_sql(start_raw, "2026-06-01")
+    end_date = format_date_sql(end_raw, "2026-06-30", is_end=True)
         
     conn = get_db()
     if not conn:
@@ -368,13 +415,16 @@ def get_pos_transactions():
             })
             
         conn.close()
-        return jsonify({
+        
+        res = {
             "total": total_records,
             "page": page,
             "limit": limit,
             "pages": (total_records + limit - 1) // limit,
             "transactions": transactions
-        })
+        }
+        set_to_cache(cache_key, res)
+        return jsonify(res)
         
     except Exception as e:
         log.error(f"Transactions API Error: {e}")
@@ -385,6 +435,14 @@ def get_pos_transactions():
 def get_pos_forecast():
     start_raw = request.args.get("start", "2026-06-01")
     end_raw = request.args.get("end", "2026-06-30")
+    force = request.args.get("force", "0") == "1"
+    
+    cache_key = f"forecast_{start_raw}_{end_raw}"
+    if not force:
+        cached = get_from_cache(cache_key)
+        if cached:
+            return jsonify(cached)
+            
     start_date = format_date_sql(start_raw, "2026-06-01")
     end_date = format_date_sql(end_raw, "2026-06-30", is_end=True)
     
@@ -526,6 +584,7 @@ def get_pos_forecast():
         sorted_forecast = sorted(occupancy_dict.values(), key=lambda x: x["date"])
         
         conn.close()
+        set_to_cache(cache_key, sorted_forecast)
         return jsonify(sorted_forecast)
         
     except Exception as e:
@@ -537,6 +596,14 @@ def get_pos_forecast():
 def get_pos_activities():
     start_raw = request.args.get("start", "")
     end_raw = request.args.get("end", "")
+    force = request.args.get("force", "0") == "1"
+    
+    cache_key = f"activities_{start_raw}_{end_raw}"
+    if not force:
+        cached = get_from_cache(cache_key)
+        if cached:
+            return jsonify(cached)
+            
     start_date = format_date_sql(start_raw, "")
     end_date = format_date_sql(end_raw, "", is_end=True)
     
@@ -643,11 +710,14 @@ def get_pos_activities():
         products.sort(key=lambda x: x["revenue_eur"], reverse=True)
             
         conn.close()
-        return jsonify({
+        
+        res = {
             "kpis": kpis,
             "monthly": monthly,
             "products": products
-        })
+        }
+        set_to_cache(cache_key, res)
+        return jsonify(res)
         
     except Exception as e:
         log.error(f"Activities API Error: {e}")
