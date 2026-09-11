@@ -1,5 +1,6 @@
 import os
 import logging
+from collections import defaultdict
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 import pyodbc
@@ -103,6 +104,13 @@ def get_pos_summary():
             JOIN Product p ON pd.ProductId = p.RecId AND f.RevenueGroupCode = p.RevenueCode
             WHERE f.Deleted = 0
               AND f.DepartCode IN ('200', '300', '605', '615')
+              AND f.CorrectionMasterId = 0
+              AND f.ActionType != 2
+              AND NOT EXISTS (
+                  SELECT 1 FROM Folio corr 
+                  WHERE corr.CorrectionMasterId = f.RecId 
+                    AND corr.Deleted = 0
+              )
               AND f.PostDate >= ? AND f.PostDate <= ?
         """
         cur.execute(sql_kpis, start_date, end_date)
@@ -130,6 +138,13 @@ def get_pos_summary():
             JOIN Product p ON pd.ProductId = p.RecId AND f.RevenueGroupCode = p.RevenueCode
             WHERE f.Deleted = 0
               AND f.DepartCode IN ('200', '300', '605', '615')
+              AND f.CorrectionMasterId = 0
+              AND f.ActionType != 2
+              AND NOT EXISTS (
+                  SELECT 1 FROM Folio corr 
+                  WHERE corr.CorrectionMasterId = f.RecId 
+                    AND corr.Deleted = 0
+              )
               AND f.PostDate >= ? AND f.PostDate <= ?
             GROUP BY d.DepartName
         """
@@ -151,6 +166,13 @@ def get_pos_summary():
             JOIN Product p ON pd.ProductId = p.RecId AND f.RevenueGroupCode = p.RevenueCode
             WHERE f.Deleted = 0
               AND f.DepartCode IN ('200', '300', '605', '615')
+              AND f.CorrectionMasterId = 0
+              AND f.ActionType != 2
+              AND NOT EXISTS (
+                  SELECT 1 FROM Folio corr 
+                  WHERE corr.CorrectionMasterId = f.RecId 
+                    AND corr.Deleted = 0
+              )
               AND f.PostDate >= ? AND f.PostDate <= ?
             GROUP BY rg.RevenueName
         """
@@ -171,6 +193,13 @@ def get_pos_summary():
             JOIN Product p ON pd.ProductId = p.RecId AND f.RevenueGroupCode = p.RevenueCode
             WHERE f.Deleted = 0
               AND f.DepartCode IN ('200', '300', '605', '615')
+              AND f.CorrectionMasterId = 0
+              AND f.ActionType != 2
+              AND NOT EXISTS (
+                  SELECT 1 FROM Folio corr 
+                  WHERE corr.CorrectionMasterId = f.RecId 
+                    AND corr.Deleted = 0
+              )
               AND f.PostDate >= ? AND f.PostDate <= ?
             GROUP BY CAST(f.PostDate AS DATE)
             ORDER BY TrendDate ASC
@@ -228,10 +257,16 @@ def get_pos_transactions():
             params.append(category)
             
         if search_val:
-            # Match room, name, remark (product description), check number or FolioId
-            filter_sql += " AND (r.Room LIKE ? OR r.FirstName1 LIKE ? OR r.LastName1 LIKE ? OR p.Remark LIKE ? OR CAST(f.FolioId AS VARCHAR) LIKE ?)"
+            filter_sql += """ AND (
+                r.Room LIKE ? 
+                OR r.FirstName1 LIKE ? 
+                OR r.LastName1 LIKE ? 
+                OR p.Remark LIKE ? 
+                OR CAST(f.FolioId AS VARCHAR) LIKE ? 
+                OR CAST(pd.SummaryId AS VARCHAR) LIKE ?
+            )"""
             search_param = f"%{search_val}%"
-            params.extend([search_param, search_param, search_param, search_param, search_param])
+            params.extend([search_param, search_param, search_param, search_param, search_param, search_param])
             
         # Count Query
         count_sql = f"""
@@ -247,31 +282,41 @@ def get_pos_transactions():
             JOIN Product p ON pd.ProductId = p.RecId AND f.RevenueGroupCode = p.RevenueCode
             WHERE f.Deleted = 0
               AND f.DepartCode IN ('200', '300', '605', '615')
+              AND f.CorrectionMasterId = 0
+              AND f.ActionType != 2
+              AND NOT EXISTS (
+                  SELECT 1 FROM Folio corr 
+                  WHERE corr.CorrectionMasterId = f.RecId 
+                    AND corr.Deleted = 0
+              )
               AND f.PostDate >= ? AND f.PostDate <= ?
               {filter_sql}
         """
         cur.execute(count_sql, *params)
         total_records = cur.fetchone()[0]
         
-        # Data Query with pagination (SQL Server 2012+ OFFSET FETCH)
+        # Data Query with pagination
         offset = (page - 1) * limit
         data_sql = f"""
             SELECT 
-                r.Room,
+                COALESCE(NULLIF(r.Room, ''), 'Walk-In') as Room,
                 f.FolioId,
-                r.FirstName1 + ' ' + r.LastName1 as GuestName,
+                COALESCE(NULLIF(LTRIM(RTRIM(r.FirstName1 + ' ' + r.LastName1)), ''), 'Walk-in Misafir') as GuestName,
                 'Credit' as PosSaleType,
                 CAST(f.PostDate AS DATE) as SellingDate,
                 f.RecordTime as Time,
                 d.DepartName,
                 rg.RevenueName,
                 p.Remark as ProductName,
-                f.CheckNo,
+                COALESCE(NULLIF(f.CheckNo, ''), CAST(pd.SummaryId AS VARCHAR)) as CheckNo,
                 pd.Amount as Qty,
                 pd.Price as UnitPriceEur,
                 pd.Amount * pd.Price * (CASE WHEN f.Amount = 0 THEN 0 ELSE f.NetAmount / f.Amount END) as PriceEur,
                 pd.Amount * pd.Price * (CASE WHEN f.Amount = 0 THEN 0 ELSE f.NetAmount / f.Amount END) * f.Rate as LocalAmount,
-                pd.SummaryId as RecId
+                pd.SummaryId as RecId,
+                ISNULL(pd.DiscountRatio, 0) as DiscountRatio,
+                ISNULL(pd.Discount, 0) as DiscountEur,
+                ISNULL(pd.Total, pd.Amount * pd.Price) as GrossEur
             FROM Folio f
             JOIN Department d ON f.DepartCode = d.DepartCode
             JOIN RevenueGroup rg ON f.RevenueGroupCode = rg.Code
@@ -283,9 +328,16 @@ def get_pos_transactions():
             JOIN Product p ON pd.ProductId = p.RecId AND f.RevenueGroupCode = p.RevenueCode
             WHERE f.Deleted = 0
               AND f.DepartCode IN ('200', '300', '605', '615')
+              AND f.CorrectionMasterId = 0
+              AND f.ActionType != 2
+              AND NOT EXISTS (
+                  SELECT 1 FROM Folio corr 
+                  WHERE corr.CorrectionMasterId = f.RecId 
+                    AND corr.Deleted = 0
+              )
               AND f.PostDate >= ? AND f.PostDate <= ?
               {filter_sql}
-            ORDER BY SellingDate ASC, Time ASC, pd.RecId ASC
+            ORDER BY f.PostDate ASC, f.RecordTime ASC, pd.RecId ASC
             OFFSET {offset} ROWS
             FETCH NEXT {limit} ROWS ONLY
         """
@@ -295,21 +347,24 @@ def get_pos_transactions():
         transactions = []
         for r in rows:
             transactions.append({
-                "room": r[0] if r[0] else "-",
+                "room": r[0] if r[0] else "Walk-In",
                 "folio_id": int(r[1]) if r[1] else "-",
-                "guest_name": r[2] if r[2] else "Walk-in Guest",
+                "guest_name": r[2] if r[2] else "Walk-in Misafir",
                 "sale_type": r[3],
                 "date": str(r[4]),
                 "time": r[5] if r[5] else "-",
                 "department": r[6],
                 "category": r[7],
                 "product_name": r[8],
-                "check_no": r[9] if r[9] else "-",
+                "check_no": str(r[9]) if r[9] else str(r[14]),
                 "qty": float(r[10] or 0),
                 "unit_price": float(r[11] or 0),
                 "price_eur": round(float(r[12] or 0), 2),
                 "local_amount": round(float(r[13] or 0), 2),
-                "rec_id": int(r[14])
+                "rec_id": int(r[14]),
+                "discount_ratio": float(r[15] or 0),
+                "discount_eur": round(float(r[16] or 0), 2),
+                "gross_eur": round(float(r[17] or 0), 2)
             })
             
         conn.close()
@@ -340,8 +395,7 @@ def get_pos_forecast():
     try:
         cur = conn.cursor()
         
-        # 1. Fetch Occupancy Forecast by Day
-        # Using Capacity = 111
+        # 1. Fetch Occupancy Forecast by Day (Capacity = 111)
         sql_occ = """
             SELECT 
                 CAST(dd.StayDate AS DATE) as StayDate,
@@ -381,9 +435,9 @@ def get_pos_forecast():
                 "baby": baby,
                 "total_pax": total_pax,
                 "occ_percent": round((sold / 111.0) * 100.0, 2) if sold > 0 else 0.0,
-                "cin_room": 0, # We will fill this next
+                "cin_room": 0,
                 "cout_room": 0,
-                "pos_revenue": 0.0, # We will merge POS sales
+                "pos_revenue": 0.0,
                 "pos_qty": 0.0
             }
             
@@ -432,6 +486,13 @@ def get_pos_forecast():
             JOIN Product p ON pd.ProductId = p.RecId AND f.RevenueGroupCode = p.RevenueCode
             WHERE f.Deleted = 0
               AND f.DepartCode IN ('200', '300', '605', '615')
+              AND f.CorrectionMasterId = 0
+              AND f.ActionType != 2
+              AND NOT EXISTS (
+                  SELECT 1 FROM Folio corr 
+                  WHERE corr.CorrectionMasterId = f.RecId 
+                    AND corr.Deleted = 0
+              )
               AND f.PostDate >= ? AND f.PostDate <= ?
             GROUP BY CAST(f.PostDate AS DATE)
         """
@@ -444,7 +505,6 @@ def get_pos_forecast():
                 occupancy_dict[s_date]["pos_revenue"] = round(eur, 2)
                 occupancy_dict[s_date]["pos_qty"] = float(qty)
             else:
-                # If there are POS sales on days without occupancy records (unlikely, but possible)
                 occupancy_dict[s_date] = {
                     "date": s_date,
                     "capacity": 111,
@@ -493,41 +553,15 @@ def get_pos_activities():
             date_cond = " AND f.PostDate >= ? AND f.PostDate <= ?"
             params = [start_date, end_date]
             
-        # 1. Total KPIs for Activities
-        sql_kpi = f"""
-            SELECT 
-                SUM(pd.Amount) as TotalQty,
-                SUM(pd.Amount * pd.Price * (CASE WHEN f.Amount = 0 THEN 0 ELSE f.NetAmount / f.Amount END)) as TotalEur,
-                SUM(pd.Amount * pd.Price * (CASE WHEN f.Amount = 0 THEN 0 ELSE f.NetAmount / f.Amount END) * f.Rate) as TotalLocal,
-                COUNT(DISTINCT pd.SummaryId) as TotalChecks
-            FROM Folio f
-            JOIN PosDetail pd ON 
-                f.Remark LIKE '%Pos Selling%'
-                AND ISNUMERIC(LEFT(f.Remark, CHARINDEX(' ', f.Remark + ' ') - 1)) = 1
-                AND CAST(LEFT(f.Remark, CHARINDEX(' ', f.Remark + ' ') - 1) AS INT) = pd.SummaryId
-            JOIN Product p ON pd.ProductId = p.RecId AND f.RevenueGroupCode = p.RevenueCode
-            WHERE f.Deleted = 0
-              AND (f.DepartCode = '615' OR f.RevenueGroupCode = 'A08')
-              {date_cond}
-        """
-        cur.execute(sql_kpi, *params)
-        kpi_row = cur.fetchone()
-        
-        kpis = {
-            "total_qty": float(kpi_row[0] or 0.0),
-            "total_eur": round(float(kpi_row[1] or 0.0), 2),
-            "total_local": round(float(kpi_row[2] or 0.0), 2),
-            "total_checks": int(kpi_row[3] or 0)
-        }
-        
-        # 2. Monthly Activity Breakdown
-        sql_monthly = f"""
+        # Single fast query for all activity transactions
+        sql_all_activities = f"""
             SELECT 
                 FORMAT(f.PostDate, 'yyyy-MM') as MonthStr,
-                COUNT(DISTINCT pd.SummaryId) as TotalChecks,
-                SUM(pd.Amount) as TotalQty,
-                SUM(pd.Amount * pd.Price * (CASE WHEN f.Amount = 0 THEN 0 ELSE f.NetAmount / f.Amount END)) as TotalEur,
-                SUM(pd.Amount * pd.Price * (CASE WHEN f.Amount = 0 THEN 0 ELSE f.NetAmount / f.Amount END) * f.Rate) as TotalLocal
+                p.Remark as ProductName,
+                pd.SummaryId,
+                pd.Amount as Qty,
+                pd.Amount * pd.Price * (CASE WHEN f.Amount = 0 THEN 0 ELSE f.NetAmount / f.Amount END) as PriceEur,
+                pd.Amount * pd.Price * (CASE WHEN f.Amount = 0 THEN 0 ELSE f.NetAmount / f.Amount END) * f.Rate as LocalAmount
             FROM Folio f
             JOIN PosDetail pd ON 
                 f.Remark LIKE '%Pos Selling%'
@@ -536,52 +570,77 @@ def get_pos_activities():
             JOIN Product p ON pd.ProductId = p.RecId AND f.RevenueGroupCode = p.RevenueCode
             WHERE f.Deleted = 0
               AND (f.DepartCode = '615' OR f.RevenueGroupCode = 'A08')
+              AND f.CorrectionMasterId = 0
+              AND f.ActionType != 2
+              AND NOT EXISTS (
+                  SELECT 1 FROM Folio corr 
+                  WHERE corr.CorrectionMasterId = f.RecId 
+                    AND corr.Deleted = 0
+              )
               {date_cond}
-            GROUP BY FORMAT(f.PostDate, 'yyyy-MM')
-            ORDER BY MonthStr ASC
         """
-        cur.execute(sql_monthly, *params)
-        monthly = []
-        for r in cur.fetchall():
+        cur.execute(sql_all_activities, *params)
+        rows = cur.fetchall()
+        
+        total_qty = 0.0
+        total_eur = 0.0
+        total_local = 0.0
+        all_checks = set()
+        
+        monthly_map = defaultdict(lambda: {"checks": set(), "qty": 0.0, "eur": 0.0, "local": 0.0})
+        products_map = defaultdict(lambda: {"checks": set(), "qty": 0.0, "eur": 0.0, "local": 0.0})
+        
+        for r in rows:
             m_str = str(r[0])
+            p_name = r[1] or "Bilinmeyen Aktivite"
+            summary_id = r[2]
+            qty = float(r[3] or 0.0)
+            eur = float(r[4] or 0.0)
+            local = float(r[5] or 0.0)
+            
+            total_qty += qty
+            total_eur += eur
+            total_local += local
+            all_checks.add(summary_id)
+            
+            monthly_map[m_str]["checks"].add(summary_id)
+            monthly_map[m_str]["qty"] += qty
+            monthly_map[m_str]["eur"] += eur
+            monthly_map[m_str]["local"] += local
+            
+            products_map[p_name]["checks"].add(summary_id)
+            products_map[p_name]["qty"] += qty
+            products_map[p_name]["eur"] += eur
+            products_map[p_name]["local"] += local
+            
+        kpis = {
+            "total_qty": round(total_qty, 2),
+            "total_eur": round(total_eur, 2),
+            "total_local": round(total_local, 2),
+            "total_checks": len(all_checks)
+        }
+        
+        monthly = []
+        for m_str in sorted(monthly_map.keys()):
+            m_data = monthly_map[m_str]
             monthly.append({
                 "month": m_str,
-                "checks": int(r[1] or 0),
-                "qty": float(r[2] or 0),
-                "revenue_eur": round(float(r[3] or 0), 2),
-                "revenue_local": round(float(r[4] or 0), 2)
+                "checks": len(m_data["checks"]),
+                "qty": round(m_data["qty"], 2),
+                "revenue_eur": round(m_data["eur"], 2),
+                "revenue_local": round(m_data["local"], 2)
             })
             
-        # 3. Product Breakdown
-        sql_products = f"""
-            SELECT 
-                p.Remark as ProductName,
-                COUNT(DISTINCT pd.SummaryId) as TotalChecks,
-                SUM(pd.Amount) as TotalQty,
-                SUM(pd.Amount * pd.Price * (CASE WHEN f.Amount = 0 THEN 0 ELSE f.NetAmount / f.Amount END)) as TotalEur,
-                SUM(pd.Amount * pd.Price * (CASE WHEN f.Amount = 0 THEN 0 ELSE f.NetAmount / f.Amount END) * f.Rate) as TotalLocal
-            FROM Folio f
-            JOIN PosDetail pd ON 
-                f.Remark LIKE '%Pos Selling%'
-                AND ISNUMERIC(LEFT(f.Remark, CHARINDEX(' ', f.Remark + ' ') - 1)) = 1
-                AND CAST(LEFT(f.Remark, CHARINDEX(' ', f.Remark + ' ') - 1) AS INT) = pd.SummaryId
-            JOIN Product p ON pd.ProductId = p.RecId AND f.RevenueGroupCode = p.RevenueCode
-            WHERE f.Deleted = 0
-              AND (f.DepartCode = '615' OR f.RevenueGroupCode = 'A08')
-              {date_cond}
-            GROUP BY p.Remark
-            ORDER BY TotalEur DESC
-        """
-        cur.execute(sql_products, *params)
         products = []
-        for r in cur.fetchall():
+        for p_name, p_data in products_map.items():
             products.append({
-                "product_name": r[0],
-                "checks": int(r[1] or 0),
-                "qty": float(r[2] or 0),
-                "revenue_eur": round(float(r[3] or 0), 2),
-                "revenue_local": round(float(r[4] or 0), 2)
+                "product_name": p_name,
+                "checks": len(p_data["checks"]),
+                "qty": round(p_data["qty"], 2),
+                "revenue_eur": round(p_data["eur"], 2),
+                "revenue_local": round(p_data["local"], 2)
             })
+        products.sort(key=lambda x: x["revenue_eur"], reverse=True)
             
         conn.close()
         return jsonify({
@@ -604,4 +663,4 @@ def static_files(filename):
     return send_from_directory(".", filename)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5070, debug=True)
+    app.run(host="0.0.0.0", port=5070, threaded=True)

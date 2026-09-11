@@ -1,0 +1,2449 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Club Adaköy POS Satış & Doluluk Raporu</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- ApexCharts CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <!-- ECharts CDN for Pie Charts with Leader Lines -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <!-- SheetJS for Excel Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --bg-base: #0b0f19;
+            --bg-surface: rgba(17, 24, 39, 0.7);
+            --bg-surface-hover: rgba(31, 41, 55, 0.8);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            --accent-primary: #3b82f6;
+            --accent-gradient: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+            --accent-green: #10b981;
+            --accent-green-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            --accent-orange: #f59e0b;
+            --accent-red: #ef4444;
+            --font-display: 'Outfit', sans-serif;
+            --font-sans: 'Plus Jakarta Sans', sans-serif;
+            --radius-lg: 16px;
+            --radius-md: 12px;
+            --radius-sm: 8px;
+            --glow: 0 0 20px rgba(59, 130, 246, 0.15);
+            --glow-green: 0 0 20px rgba(16, 185, 129, 0.15);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            font-family: var(--font-sans);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.05) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.05) 0px, transparent 50%);
+        }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        header {
+            padding: 1.5rem 2rem;
+            background: rgba(11, 15, 25, 0.8);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 42px;
+            height: 42px;
+            background: var(--accent-gradient);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.4rem;
+            box-shadow: var(--glow);
+        }
+
+        .logo-title h1 {
+            font-family: var(--font-display);
+            font-size: 1.25rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            background: linear-gradient(120deg, #ffffff, #c7d2fe);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .logo-title p {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+        }
+
+        .status-badge.connected .status-dot {
+            background-color: var(--accent-green);
+            box-shadow: 0 0 8px var(--accent-green);
+        }
+
+        .status-badge.disconnected .status-dot {
+            background-color: var(--accent-red);
+            box-shadow: 0 0 8px var(--accent-red);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .date-picker-group {
+            display: flex;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 4px 8px;
+            gap: 8px;
+        }
+
+        .date-picker-group label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-weight: 600;
+            text-transform: uppercase;
+            padding-left: 4px;
+        }
+
+        .date-input {
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            font-family: var(--font-sans);
+            font-size: 0.85rem;
+            font-weight: 500;
+            outline: none;
+            cursor: pointer;
+            padding: 4px;
+        }
+
+        .date-input::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+            opacity: 0.7;
+            cursor: pointer;
+        }
+
+        .btn-refresh {
+            background: var(--accent-gradient);
+            border: none;
+            color: white;
+            padding: 10px 18px;
+            border-radius: var(--radius-md);
+            font-family: var(--font-sans);
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: var(--glow);
+        }
+
+        .btn-refresh:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+            box-shadow: 0 0 25px rgba(59, 130, 246, 0.3);
+        }
+
+        .btn-refresh:active {
+            transform: translateY(0);
+        }
+
+        main {
+            flex: 1;
+            padding: 1.5rem 2rem;
+            max-width: 1600px;
+            width: 100%;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        /* Tabs Navigation */
+        .tabs-nav {
+            display: flex;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            padding: 6px;
+            border-radius: var(--radius-lg);
+            gap: 6px;
+            align-self: flex-start;
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            padding: 10px 20px;
+            border-radius: var(--radius-md);
+            font-family: var(--font-sans);
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .tab-btn:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .tab-btn.active {
+            color: white;
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: inset 0 1px 1px rgba(255,255,255,0.1);
+        }
+
+        /* Tab Content */
+        .tab-content {
+            display: none;
+            flex-direction: column;
+            gap: 1.5rem;
+            animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+
+        .tab-content.active {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* KPI Dashboard Grid */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 1.25rem;
+        }
+
+        .kpi-card {
+            background: var(--bg-surface);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .kpi-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(59, 130, 246, 0.3);
+            background: var(--bg-surface-hover);
+        }
+
+        .kpi-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: var(--accent-gradient);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .kpi-card:hover::before {
+            opacity: 1;
+        }
+
+        .kpi-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .kpi-title {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+
+        .kpi-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: var(--radius-sm);
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--accent-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+
+        .kpi-card:nth-child(2) .kpi-icon {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--accent-green);
+        }
+
+        .kpi-card:nth-child(3) .kpi-icon {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--accent-orange);
+        }
+
+        .kpi-card:nth-child(4) .kpi-icon {
+            background: rgba(139, 92, 246, 0.1);
+            color: #8b5cf6;
+        }
+
+        .kpi-value {
+            font-family: var(--font-display);
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .kpi-footer {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        /* Charts Layout */
+        .charts-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 1.25rem;
+        }
+
+        .charts-row-equal {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.25rem;
+        }
+
+        @media (max-width: 1024px) {
+            .charts-row, .charts-row-equal {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .charts-row, .charts-row-equal {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+            .chart-card {
+                padding: 1rem;
+                overflow: hidden;
+                box-sizing: border-box;
+                width: 100%;
+            }
+            .chart-body {
+                min-height: 320px;
+                max-width: 100%;
+                overflow: hidden;
+            }
+            .chart-card canvas, .chart-card svg {
+                max-width: 100% !important;
+            }
+        }
+
+        .chart-card {
+            background: var(--bg-surface);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            position: relative;
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chart-title {
+            font-family: var(--font-display);
+            font-size: 1.05rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .chart-title i {
+            color: var(--accent-primary);
+        }
+
+        .chart-body {
+            position: relative;
+            min-height: 350px;
+            width: 100%;
+        }
+
+        /* Grid for departments & category list side-by-side */
+        .right-charts-col {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        /* Table & Lists Design */
+        .card-table {
+            background: var(--bg-surface);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            overflow: hidden;
+        }
+
+        .table-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .search-wrapper {
+            position: relative;
+            flex: 1;
+            min-width: 250px;
+            max-width: 400px;
+        }
+
+        .search-wrapper i {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .search-input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 10px 14px 10px 40px;
+            color: var(--text-primary);
+            font-family: var(--font-sans);
+            font-size: 0.85rem;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .search-input:focus {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(59, 130, 246, 0.4);
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.1);
+        }
+
+        .filter-select-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .select-filter {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 10px 16px;
+            border-radius: var(--radius-md);
+            font-family: var(--font-sans);
+            font-size: 0.85rem;
+            outline: none;
+            cursor: pointer;
+            transition: border 0.3s ease;
+        }
+
+        .select-filter:focus {
+            border-color: rgba(59, 130, 246, 0.4);
+        }
+
+        .select-filter option {
+            background: var(--bg-base);
+            color: var(--text-primary);
+        }
+
+        .btn-export {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 10px 16px;
+            border-radius: var(--radius-md);
+            font-family: var(--font-sans);
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .btn-export:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--text-secondary);
+        }
+
+        .table-responsive {
+            overflow-x: auto;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-color);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.85rem;
+        }
+
+        th {
+            background: rgba(255, 255, 255, 0.02);
+            color: var(--text-secondary);
+            font-weight: 700;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border-color);
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.015);
+        }
+
+        .badge-room {
+            background: rgba(59, 130, 246, 0.12);
+            color: var(--accent-primary);
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 0.75rem;
+            display: inline-block;
+        }
+
+        .badge-dept {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-secondary);
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        .badge-dept.bar {
+            background: rgba(139, 92, 246, 0.12);
+            color: #a78bfa;
+        }
+
+        .badge-dept.restaurant {
+            background: rgba(245, 158, 11, 0.12);
+            color: #fbbf24;
+        }
+
+        .badge-dept.store {
+            background: rgba(16, 185, 129, 0.12);
+            color: #34d399;
+        }
+
+        .badge-dept.activity {
+            background: rgba(6, 182, 212, 0.12);
+            color: #22d3ee;
+        }
+
+        .text-num {
+            font-family: var(--font-display);
+            font-weight: 600;
+        }
+
+        .text-green {
+            color: var(--accent-green);
+        }
+
+        /* Pagination */
+        .pagination-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
+            margin-top: 0.5rem;
+        }
+
+        .pagination-info {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .pagination-buttons {
+            display: flex;
+            gap: 6px;
+        }
+
+        .btn-page {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-family: var(--font-sans);
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .btn-page:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-primary);
+        }
+
+        .btn-page.active {
+            background: var(--accent-gradient);
+            color: white;
+            border: none;
+            box-shadow: var(--glow);
+        }
+
+        .btn-page:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        /* Loader Overlay */
+        .loader-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(11, 15, 25, 0.7);
+            backdrop-filter: blur(8px);
+            z-index: 999;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 16px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .loader-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(255,255,255,0.05);
+            border-top-color: var(--accent-primary);
+            border-radius: 50%;
+            animation: spin 1s infinite linear;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loader-text {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-family: var(--font-sans);
+            letter-spacing: 0.5px;
+        }
+
+        /* Occupancy Specifics */
+        .occ-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.25rem;
+        }
+
+        .spend-table td {
+            font-family: var(--font-sans);
+        }
+        
+        .spend-table th {
+            text-align: center;
+        }
+
+        .spend-table td.text-center {
+            text-align: center;
+        }
+
+        .spend-table td.text-right {
+            text-align: right;
+        }
+
+        .total-badge {
+            text-align: center;
+            padding: 10px 16px;
+            margin-top: 10px;
+            background: rgba(59, 130, 246, 0.08);
+            border: 1px solid rgba(59, 130, 246, 0.25);
+            border-radius: var(--radius-md);
+            font-family: var(--font-display);
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #60a5fa;
+            letter-spacing: 0.5px;
+        }
+
+        /* Empty state */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 4rem 2rem;
+            color: var(--text-muted);
+            gap: 12px;
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.02));
+            width: 80px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            border: 1px solid var(--border-color);
+        }
+
+        .empty-state p {
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-section">
+            <div class="logo-icon">
+                <i class="fa-solid fa-hotel"></i>
+            </div>
+            <div class="logo-title">
+                <h1>Club Adaköy</h1>
+                <p>POS Satış &amp; Doluluk Analiz Paneli</p>
+            </div>
+        </div>
+
+        <div class="header-controls">
+            <div id="statusBadge" class="status-badge disconnected">
+                <div class="status-dot"></div>
+                <span id="statusText">Sedna Bağlantısı Yok</span>
+            </div>
+
+            <div class="date-picker-group">
+                <select id="quickMonthSelect" class="date-input" style="font-weight: 700; color: #3b82f6; border-right: 1px solid var(--border-color); padding-right: 8px; margin-right: 4px; background: rgba(59, 130, 246, 0.12); border-radius: 6px; padding: 5px 10px; outline: none; cursor: pointer;">
+                    <option value="custom">📅 Özel Aralık</option>
+                    <option value="season">☀️ Tüm Sezon (May - Ekim)</option>
+                    <option value="2026-05">Mayıs 2026</option>
+                    <option value="2026-06">Haziran 2026</option>
+                    <option value="2026-07">Temmuz 2026</option>
+                    <option value="2026-08" selected>Ağustos 2026</option>
+                    <option value="2026-09">Eylül 2026</option>
+                    <option value="2026-10">Ekim 2026</option>
+                </select>
+                <label>Başlangıç</label>
+                <input type="date" id="startDate" class="date-input" value="2026-08-01">
+                <div style="width: 1px; height: 16px; background: var(--border-color);"></div>
+                <label>Bitiş</label>
+                <input type="date" id="endDate" class="date-input" value="2026-08-31">
+            </div>
+
+            <button id="btnRefresh" class="btn-refresh">
+                <i class="fa-solid fa-arrows-rotate"></i> Verileri Çek
+            </button>
+        </div>
+    </header>
+
+    <main>
+        <div class="tabs-nav">
+            <button class="tab-btn active" onclick="switchTab('dashboard')">
+                <i class="fa-solid fa-chart-line"></i> Dashboard
+            </button>
+            <button class="tab-btn" onclick="switchTab('forecast')">
+                <i class="fa-solid fa-people-roof"></i> Doluluk &amp; POS Karşılaştırma
+            </button>
+            <button class="tab-btn" onclick="switchTab('activities')">
+                <i class="fa-solid fa-water"></i> Su Sporları &amp; Aktiviteler
+            </button>
+            <button class="tab-btn" onclick="switchTab('transactions')">
+                <i class="fa-solid fa-receipt"></i> Detaylı POS Raporu
+            </button>
+        </div>
+
+        <!-- 1. DASHBOARD TAB -->
+        <div id="tab-dashboard" class="tab-content active">
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Toplam Satış</span>
+                        <div class="kpi-icon"><i class="fa-solid fa-euro-sign"></i></div>
+                    </div>
+                    <div class="kpi-value text-num" id="kpi-revenue">€0.00</div>
+                    <div class="kpi-footer" id="kpi-revenue-try">₺0.00</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Toplam Miktar</span>
+                        <div class="kpi-icon"><i class="fa-solid fa-box-open"></i></div>
+                    </div>
+                    <div class="kpi-value text-num text-green" id="kpi-qty">0</div>
+                    <div class="kpi-footer">Satılan ürün adeti</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Ortalama Adisyon</span>
+                        <div class="kpi-icon"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+                    </div>
+                    <div class="kpi-value text-num" id="kpi-avg-check">€0.00</div>
+                    <div class="kpi-footer" id="kpi-total-checks">0 toplam adisyon</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Ortalama Kur</span>
+                        <div class="kpi-icon"><i class="fa-solid fa-coins"></i></div>
+                    </div>
+                    <div class="kpi-value text-num" id="kpi-avg-rate">0.00</div>
+                    <div class="kpi-footer">Euro/TRY efektif ortalama</div>
+                </div>
+            </div>
+
+            <div class="charts-row">
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3 class="chart-title"><i class="fa-solid fa-chart-area"></i> Günlük POS Satış Trendi</h3>
+                    </div>
+                    <div class="chart-body" id="trendChart"></div>
+                </div>
+
+                <div class="right-charts-col">
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <h3 class="chart-title"><i class="fa-solid fa-chart-pie"></i> Departman Dağılımı</h3>
+                        </div>
+                        <div class="chart-body" style="height: 350px; width: 100%;" id="deptChart"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="charts-row" style="grid-template-columns: 1fr;">
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3 class="chart-title"><i class="fa-solid fa-chart-bar"></i> Gelir Kategorisi Dağılımı</h3>
+                    </div>
+                    <div class="chart-body" id="catChart" style="min-height: 250px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. FORECAST TAB -->
+        <div id="tab-forecast" class="tab-content">
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h3 class="chart-title"><i class="fa-solid fa-chart-line"></i> Doluluk Oranı vs POS Satış Korelasyonu</h3>
+                </div>
+                <div class="chart-body" id="occPosChart"></div>
+            </div>
+
+            <div class="card-table">
+                <div class="table-controls">
+                    <h3 class="chart-title"><i class="fa-solid fa-table-list"></i> Günlük Doluluk ve POS Karşılaştırma Raporu</h3>
+                    <button class="btn-export" onclick="exportForecastTable()">
+                        <i class="fa-solid fa-file-excel text-green"></i> Excel'e Aktar
+                    </button>
+                </div>
+                <div class="table-responsive">
+                    <table class="spend-table" id="forecastTable">
+                        <thead>
+                            <tr>
+                                <th>Tarih</th>
+                                <th>Kapasite</th>
+                                <th>Satılan Oda</th>
+                                <th>Boş Oda</th>
+                                <th>Doluluk %</th>
+                                <th>Yetişkin</th>
+                                <th>Çocuk</th>
+                                <th>Bebek</th>
+                                <th>Toplam Pax</th>
+                                <th>Giriş Oda</th>
+                                <th>Çıkış Oda</th>
+                                <th>POS Satış (€)</th>
+                                <th>Oda Başına Harcama</th>
+                                <th>Pax Başı Harcama</th>
+                            </tr>
+                        </thead>
+                        <tbody id="forecastTableBody">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. ACTIVITIES & WATER SPORTS TAB -->
+        <div id="tab-activities" class="tab-content">
+            <!-- KPI Cards for Activities -->
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Su Sporları Geliri</span>
+                        <div class="kpi-icon" style="background: rgba(6, 182, 212, 0.1); color: #06b6d4;"><i class="fa-solid fa-water"></i></div>
+                    </div>
+                    <div class="kpi-value text-num" id="act-kpi-revenue">€0.00</div>
+                    <div class="kpi-footer" id="act-kpi-revenue-try">₺0.00</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Toplam Satış Miktarı</span>
+                        <div class="kpi-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;"><i class="fa-solid fa-person-swimming"></i></div>
+                    </div>
+                    <div class="kpi-value text-num text-green" id="act-kpi-qty">0</div>
+                    <div class="kpi-footer">Satılan Aktivite / Ders Adeti</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Adisyon Sayısı</span>
+                        <div class="kpi-icon" style="background: rgba(139, 92, 246, 0.1); color: #8b5cf6;"><i class="fa-solid fa-receipt"></i></div>
+                    </div>
+                    <div class="kpi-value text-num" id="act-kpi-checks">0</div>
+                    <div class="kpi-footer">Toplam aktivite adisyonu</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <span class="kpi-title">En Çok Satan Aktivite</span>
+                        <div class="kpi-icon" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;"><i class="fa-solid fa-trophy"></i></div>
+                    </div>
+                    <div class="kpi-value text-num" style="font-size: 0.95rem; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="act-kpi-top">-</div>
+                    <div class="kpi-footer" id="act-kpi-top-revenue">€0.00 gelir</div>
+                </div>
+            </div>
+
+            <!-- Charts Row for Activities -->
+            <div class="charts-row-equal">
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3 class="chart-title"><i class="fa-solid fa-chart-column" style="color: #06b6d4;"></i> Ay Ay Su Sporları &amp; Aktivite Gelir Trendi</h3>
+                    </div>
+                    <div class="chart-body" id="actMonthlyChart"></div>
+                </div>
+
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3 class="chart-title"><i class="fa-solid fa-chart-bar" style="color: #8b5cf6;"></i> Aktivite Ürün Dağılımı</h3>
+                    </div>
+                    <div class="chart-body" style="height: 350px; width: 100%;" id="actProductChart"></div>
+                </div>
+            </div>
+
+            <!-- Monthly Breakdown Table (Ay Ay Çekme) -->
+            <div class="card-table">
+                <div class="table-controls">
+                    <h3 class="chart-title"><i class="fa-solid fa-calendar-days" style="color: #06b6d4;"></i> Ay Ay Su Sporları Gelir &amp; Adisyon Analiz Raporu</h3>
+                    <button class="btn-export" onclick="exportActivityMonthlyTable()">
+                        <i class="fa-solid fa-file-excel text-green"></i> Excel'e Aktar
+                    </button>
+                </div>
+                <div class="table-responsive">
+                    <table class="spend-table" id="actMonthlyTable">
+                        <thead>
+                            <tr>
+                                <th>Ay / Dönem</th>
+                                <th>Adisyon Sayısı</th>
+                                <th>Satılan Aktivite Adeti</th>
+                                <th style="text-align: right;">Toplam Gelir (€)</th>
+                                <th style="text-align: right;">Toplam Gelir (₺)</th>
+                                <th style="text-align: right;">Ortalama Adisyon (€)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="actMonthlyTableBody">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Product Breakdown Table -->
+            <div class="card-table">
+                <div class="table-controls">
+                    <h3 class="chart-title"><i class="fa-solid fa-list-check" style="color: #10b981;"></i> Aktivite &amp; Su Sporları Ürün Bazlı Performans Raporu</h3>
+                    <button class="btn-export" onclick="exportActivityProductsTable()">
+                        <i class="fa-solid fa-file-excel text-green"></i> Excel'e Aktar
+                    </button>
+                </div>
+                <div class="table-responsive">
+                    <table class="spend-table" id="actProductsTable">
+                        <thead>
+                            <tr>
+                                <th style="text-align: left;">Ürün / Aktivite Adı</th>
+                                <th>Adisyon Sayısı</th>
+                                <th>Satış Adeti</th>
+                                <th style="text-align: right;">Toplam Gelir (€)</th>
+                                <th style="text-align: right;">Toplam Gelir (₺)</th>
+                                <th style="text-align: right;">Pay %</th>
+                            </tr>
+                        </thead>
+                        <tbody id="actProductsTableBody">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. DETAILED POS TRANSACTIONS TAB -->
+        <div id="tab-transactions" class="tab-content">
+            <div class="card-table">
+                <div class="table-controls">
+                    <div class="search-wrapper">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" id="txSearch" class="search-input" placeholder="Oda, Misafir Adı, Ürün veya Folio ID ara...">
+                    </div>
+
+                    <div class="filter-select-group">
+                        <select id="filterDept" class="select-filter">
+                            <option value="">Tüm Departmanlar</option>
+                            <option value="Captain Cooks Bar">Captain Cooks Bar</option>
+                            <option value="Cantina Restaurant">Cantina Restaurant</option>
+                            <option value="Store">Store</option>
+                            <option value="Activity Department">Su Sporları / Aktiviteler (Activity Dept)</option>
+                        </select>
+
+                        <select id="filterCat" class="select-filter">
+                            <option value="">Tüm Kategoriler</option>
+                            <option value="Food Revenue %10">Food Revenue %10</option>
+                            <option value="Beverage Revenue %10">Beverage Revenue %10</option>
+                            <option value="Alchol Revenue %20">Alchol Revenue %20</option>
+                            <option value="Activity Revenue %20">Activity Revenue %20 (Su Sporları)</option>
+                            <option value="Other Revenue %20">Other Revenue %20</option>
+                            <option value="Other Revenue % 10">Other Revenue % 10</option>
+                        </select>
+
+                        <button class="btn-export" onclick="exportTransactionsTable()">
+                            <i class="fa-solid fa-file-excel text-green"></i> Excel'e Aktar
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table id="transactionsTable">
+                        <thead>
+                            <tr>
+                                <th>Tarih / Saat</th>
+                                <th>Oda</th>
+                                <th>Folio ID</th>
+                                <th>Misafir Adı</th>
+                                <th>Departman</th>
+                                <th>Kategori</th>
+                                <th>Ürün Adı</th>
+                                <th>Adisyon No</th>
+                                <th style="text-align: center;">Miktar</th>
+                                <th style="text-align: right;">Birim Fiyat (€)</th>
+                                <th style="text-align: right;">Toplam Tutar (€)</th>
+                                <th style="text-align: right;">Toplam Tutar (TL)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transactionsTableBody">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="pagination-container">
+                    <div class="pagination-info" id="paginationInfo">
+                        Toplam 0 kayıttan 0 - 0 gösteriliyor
+                    </div>
+                    <div class="pagination-buttons" id="paginationButtons">
+                        <!-- Buttons added dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Loading overlay -->
+    <div id="loader" class="loader-overlay">
+        <div class="spinner"></div>
+        <div class="loader-text" id="loaderText">Veriler sorgulanıyor, lütfen bekleyin...</div>
+    </div>
+
+    <script>
+        // Global variables
+        let trendChartObj = null;
+        let deptChartObj = null;
+        let catChartObj = null;
+        let occPosChartObj = null;
+        let actMonthlyChartObj = null;
+        let actProductChartObj = null;
+        
+        let txCurrentPage = 1;
+        const txPageLimit = 100;
+        let allForecastData = [];
+        let allActivityData = null;
+
+        function initDefaultDates() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            
+            const firstDay = `${year}-${month}-01`;
+            const lastDayObj = new Date(year, now.getMonth() + 1, 0);
+            const lastDayStr = String(lastDayObj.getDate()).padStart(2, '0');
+            const lastDay = `${year}-${month}-${lastDayStr}`;
+            
+            const sInput = document.getElementById('startDate');
+            const eInput = document.getElementById('endDate');
+            if (sInput) sInput.value = firstDay;
+            if (eInput) eInput.value = lastDay;
+            
+            const qSelect = document.getElementById('quickMonthSelect');
+            if (qSelect) {
+                const ymVal = `${year}-${month}`;
+                let found = false;
+                for (let i = 0; i < qSelect.options.length; i++) {
+                    if (qSelect.options[i].value === ymVal) {
+                        qSelect.selectedIndex = i;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) qSelect.value = 'custom';
+            }
+        }
+
+        // App Initialisation
+        function initApp() {
+            initDefaultDates();
+            checkStatus();
+            fetchData();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initApp);
+        } else {
+            initApp();
+        }
+            
+        // Set up event listeners
+        document.getElementById('btnRefresh').addEventListener('click', fetchData);
+            
+            // Quick Month Select Listener
+            document.getElementById('quickMonthSelect').addEventListener('change', function() {
+                const val = this.value;
+                const sInput = document.getElementById('startDate');
+                const eInput = document.getElementById('endDate');
+                
+                if (val === 'season') {
+                    sInput.value = '2026-05-01';
+                    eInput.value = '2026-10-31';
+                } else if (val === '2026-05') {
+                    sInput.value = '2026-05-01';
+                    eInput.value = '2026-05-31';
+                } else if (val === '2026-06') {
+                    sInput.value = '2026-06-01';
+                    eInput.value = '2026-06-30';
+                } else if (val === '2026-07') {
+                    sInput.value = '2026-07-01';
+                    eInput.value = '2026-07-31';
+                } else if (val === '2026-08') {
+                    sInput.value = '2026-08-01';
+                    eInput.value = '2026-08-31';
+                } else if (val === '2026-09') {
+                    sInput.value = '2026-09-01';
+                    eInput.value = '2026-09-30';
+                } else if (val === '2026-10') {
+                    sInput.value = '2026-10-01';
+                    eInput.value = '2026-10-31';
+                } else {
+                    return;
+                }
+                txCurrentPage = 1;
+                fetchData();
+            });
+
+            const resetMonthDropdown = () => {
+                document.getElementById('quickMonthSelect').value = 'custom';
+                txCurrentPage = 1;
+            };
+            document.getElementById('startDate').addEventListener('change', resetMonthDropdown);
+            document.getElementById('endDate').addEventListener('change', resetMonthDropdown);
+            document.getElementById('filterDept').addEventListener('change', () => { txCurrentPage = 1; fetchTransactions(); });
+            document.getElementById('filterCat').addEventListener('change', () => { txCurrentPage = 1; fetchTransactions(); });
+            
+            let searchTimeout = null;
+            document.getElementById('txSearch').addEventListener('input', () => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    txCurrentPage = 1;
+                    fetchTransactions();
+                }, 400);
+            });
+
+        // Switch Tabs
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            // Find clicked button
+            const clickedBtn = Array.from(document.querySelectorAll('.tab-btn')).find(btn => btn.getAttribute('onclick').includes(tabId));
+            if (clickedBtn) clickedBtn.classList.add('active');
+            
+            const targetContent = document.getElementById(`tab-${tabId}`);
+            if (targetContent) targetContent.classList.add('active');
+            
+            // Redraw Charts to fix display width bugs in hidden tabs
+            setTimeout(() => {
+                if (tabId === 'dashboard') {
+                    if (trendChartObj) trendChartObj.windowResize();
+                    if (deptChartObj && deptChartObj.resize) deptChartObj.resize();
+                    if (catChartObj) catChartObj.windowResize();
+                } else if (tabId === 'forecast') {
+                    if (occPosChartObj) occPosChartObj.windowResize();
+                } else if (tabId === 'activities') {
+                    if (actMonthlyChartObj) actMonthlyChartObj.windowResize();
+                    if (allActivityData && allActivityData.products) {
+                        renderActProductChart(allActivityData.products);
+                    }
+                    if (actProductChartObj && actProductChartObj.windowResize) actProductChartObj.windowResize();
+                }
+            }, 100);
+        }
+
+        window.addEventListener('resize', () => {
+            if (deptChartObj && deptChartObj.resize) deptChartObj.resize();
+            if (actProductChartObj && actProductChartObj.windowResize) actProductChartObj.windowResize();
+        });
+
+        // Show/Hide Loader
+        function showLoader(text = "Veriler sorgulanıyor, lütfen bekleyin...") {
+            document.getElementById('loaderText').innerText = text;
+            document.getElementById('loader').classList.add('active');
+        }
+
+        function hideLoader() {
+            document.getElementById('loader').classList.remove('active');
+        }
+
+        // Check Connection Status
+        async function checkStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                
+                const badge = document.getElementById('statusBadge');
+                const text = document.getElementById('statusText');
+                
+                if (data.status === 'connected') {
+                    badge.className = 'status-badge connected';
+                    text.innerText = `Sedna Aktif (${data.server})`;
+                } else {
+                    badge.className = 'status-badge disconnected';
+                    text.innerText = 'Sedna Bağlantısı Başarısız';
+                }
+            } catch (err) {
+                const badge = document.getElementById('statusBadge');
+                const text = document.getElementById('statusText');
+                badge.className = 'status-badge disconnected';
+                text.innerText = 'API Servisi Çalışmıyor';
+            }
+        }
+
+        // Fetch All Data
+        async function fetchData() {
+            showLoader("Veritabanından POS ve Doluluk verileri çekiliyor...");
+            await checkStatus();
+            
+            try {
+                await Promise.all([
+                    fetchSummary(),
+                    fetchForecast(),
+                    fetchActivities(),
+                    fetchTransactions()
+                ]);
+            } catch (e) {
+                console.error("Fetch error:", e);
+                alert("Veriler yüklenirken bir hata oluştu: " + e.message);
+            } finally {
+                hideLoader();
+            }
+        }
+
+        // Fetch Summary & Load Dashboard Charts
+        async function fetchSummary() {
+            const start = document.getElementById('startDate').value;
+            const end = document.getElementById('endDate').value;
+            
+            const response = await fetch(`/api/pos-summary?start=${start}&end=${end}`);
+            const data = await response.json();
+            
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            
+            // Populate KPIs
+            document.getElementById('kpi-revenue').innerText = '€' + data.kpis.total_eur.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            document.getElementById('kpi-revenue-try').innerText = '₺' + data.kpis.total_local.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            document.getElementById('kpi-qty').innerText = data.kpis.total_qty.toLocaleString('tr-TR');
+            document.getElementById('kpi-total-checks').innerText = `${data.kpis.total_checks.toLocaleString('tr-TR')} toplam adisyon`;
+            
+            const avgCheck = data.kpis.total_checks > 0 ? (data.kpis.total_eur / data.kpis.total_checks) : 0;
+            document.getElementById('kpi-avg-check').innerText = '€' + avgCheck.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            
+            const avgRate = data.kpis.total_eur > 0 ? (data.kpis.total_local / data.kpis.total_eur) : 0;
+            document.getElementById('kpi-avg-rate').innerText = avgRate.toLocaleString('tr-TR', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+            
+            // Build Charts
+            renderTrendChart(data.trend);
+            renderDeptChart(data.departments);
+            renderCategoryChart(data.categories);
+        }
+
+        // Fetch Forecast & Load Correlation
+        async function fetchForecast() {
+            const start = document.getElementById('startDate').value;
+            const end = document.getElementById('endDate').value;
+            
+            const response = await fetch(`/api/pos-forecast?start=${start}&end=${end}`);
+            allForecastData = await response.json();
+            
+            if (allForecastData.error) {
+                throw new Error(allForecastData.error);
+            }
+            
+            // Render forecast table
+            const tbody = document.getElementById('forecastTableBody');
+            tbody.innerHTML = '';
+            
+            if (allForecastData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="14" class="text-center" style="color: var(--text-muted); padding: 2rem;">Seçilen tarih aralığında doluluk/satış verisi bulunamadı.</td></tr>`;
+                return;
+            }
+            
+            allForecastData.forEach(row => {
+                const tr = document.createElement('tr');
+                
+                const formattedDate = new Date(row.date).toLocaleDateString('tr-TR', {day: '2-digit', month: '2-digit', year: 'numeric'});
+                const spendPerRoom = row.sold > 0 ? (row.pos_revenue / row.sold) : 0;
+                const spendPerPax = row.total_pax > 0 ? (row.pos_revenue / row.total_pax) : 0;
+                
+                tr.innerHTML = `
+                    <td class="text-center text-num">${formattedDate}</td>
+                    <td class="text-center text-num">${row.capacity}</td>
+                    <td class="text-center text-num" style="font-weight: 700; color: white;">${row.sold}</td>
+                    <td class="text-center text-num" style="color: var(--text-muted);">${row.difference}</td>
+                    <td class="text-center text-num text-green">${row.occ_percent}%</td>
+                    <td class="text-center text-num">${row.adult}</td>
+                    <td class="text-center text-num">${row.paid_child + row.free_child}</td>
+                    <td class="text-center text-num">${row.baby}</td>
+                    <td class="text-center text-num" style="font-weight: 700; color: #8b5cf6;">${row.total_pax}</td>
+                    <td class="text-center text-num" style="color: var(--accent-orange);">${row.cin_room}</td>
+                    <td class="text-center text-num">${row.cout_room}</td>
+                    <td class="text-right text-num" style="font-weight: 700; color: var(--accent-primary);">€${row.pos_revenue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    <td class="text-right text-num">€${spendPerRoom.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    <td class="text-right text-num">€${spendPerPax.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+            
+            // Build Correlation Chart
+            renderOccPosChart(allForecastData);
+        }
+
+        // Fetch Detailed Transactions (Paginated)
+        async function fetchTransactions() {
+            const start = document.getElementById('startDate').value;
+            const end = document.getElementById('endDate').value;
+            const dept = document.getElementById('filterDept').value;
+            const cat = document.getElementById('filterCat').value;
+            const search = document.getElementById('txSearch').value;
+            
+            const response = await fetch(`/api/pos-transactions?start=${start}&end=${end}&department=${encodeURIComponent(dept)}&category=${encodeURIComponent(cat)}&search=${encodeURIComponent(search)}&page=${txCurrentPage}&limit=${txPageLimit}`);
+            const data = await response.json();
+            
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            
+            const tbody = document.getElementById('transactionsTableBody');
+            tbody.innerHTML = '';
+            
+            if (data.transactions.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="12"><div class="empty-state"><i class="fa-solid fa-receipt"></i><p>Eşleşen işlem bulunamadı.</p></div></td></tr>`;
+                document.getElementById('paginationInfo').innerText = '0 kayıttan 0 - 0 gösteriliyor';
+                document.getElementById('paginationButtons').innerHTML = '';
+                return;
+            }
+            
+            data.transactions.forEach(tx => {
+                const tr = document.createElement('tr');
+                
+                const formattedDate = new Date(tx.date).toLocaleDateString('tr-TR', {day: '2-digit', month: '2-digit', year: 'numeric'});
+                
+                let deptClass = 'badge-dept';
+                if (tx.department.includes('Bar')) deptClass += ' bar';
+                else if (tx.department.includes('Restaurant')) deptClass += ' restaurant';
+                else if (tx.department.includes('Store')) deptClass += ' store';
+                else if (tx.department.includes('Activity')) deptClass += ' activity';
+                
+                tr.innerHTML = `
+                    <td>
+                        <div style="font-weight: 700; color: white;">${formattedDate}</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">${tx.time}</div>
+                    </td>
+                    <td><span class="badge-room">${tx.room}</span></td>
+                    <td class="text-num" style="color: var(--text-secondary);">${tx.folio_id}</td>
+                    <td style="font-weight: 600; color: white;">${tx.guest_name}</td>
+                    <td><span class="${deptClass}">${tx.department}</span></td>
+                    <td style="color: var(--text-secondary); font-size: 0.8rem;">${tx.category}</td>
+                    <td style="font-weight: 600; color: #f3f4f6;">${tx.product_name}</td>
+                    <td class="text-num" style="color: var(--text-muted);">${tx.check_no}</td>
+                    <td class="text-center text-num" style="font-weight: 700; color: white;">${tx.qty}</td>
+                    <td class="text-right text-num">€${tx.unit_price.toFixed(2)}</td>
+                    <td class="text-right text-num" style="font-weight: 700; color: var(--accent-primary);">€${tx.price_eur.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                    <td class="text-right text-num" style="color: var(--accent-green);">₺${tx.local_amount.toLocaleString('tr-TR', {minimumFractionDigits: 2})}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+            
+            // Pagination Calculations
+            const startIdx = (txCurrentPage - 1) * txPageLimit + 1;
+            const endIdx = Math.min(startIdx + data.transactions.length - 1, data.total);
+            document.getElementById('paginationInfo').innerText = `Toplam ${data.total.toLocaleString('tr-TR')} kayıttan ${startIdx.toLocaleString('tr-TR')} - ${endIdx.toLocaleString('tr-TR')} arası gösteriliyor`;
+            
+            // Build Pagination Buttons
+            renderPagination(data.pages);
+        }
+
+        // Render Pagination Control Buttons
+        function renderPagination(totalPages) {
+            const container = document.getElementById('paginationButtons');
+            container.innerHTML = '';
+            
+            if (totalPages <= 1) return;
+            
+            // Previous button
+            const btnPrev = document.createElement('button');
+            btnPrev.className = 'btn-page';
+            btnPrev.innerHTML = '<i class="fa-solid fa-angle-left"></i>';
+            btnPrev.disabled = txCurrentPage === 1;
+            btnPrev.addEventListener('click', () => {
+                if (txCurrentPage > 1) {
+                    txCurrentPage--;
+                    fetchTransactions();
+                }
+            });
+            container.appendChild(btnPrev);
+            
+            // Numeric buttons
+            const range = 2; // Pages to show before/after current
+            let startPage = Math.max(1, txCurrentPage - range);
+            let endPage = Math.min(totalPages, txCurrentPage + range);
+            
+            if (startPage > 1) {
+                const btn1 = document.createElement('button');
+                btn1.className = 'btn-page';
+                btn1.innerText = '1';
+                btn1.addEventListener('click', () => { txCurrentPage = 1; fetchTransactions(); });
+                container.appendChild(btn1);
+                
+                if (startPage > 2) {
+                    const dots = document.createElement('span');
+                    dots.innerText = '...';
+                    dots.style.alignSelf = 'center';
+                    dots.style.color = 'var(--text-muted)';
+                    dots.style.margin = '0 4px';
+                    container.appendChild(dots);
+                }
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                const btn = document.createElement('button');
+                btn.className = `btn-page ${i === txCurrentPage ? 'active' : ''}`;
+                btn.innerText = i;
+                btn.addEventListener('click', () => {
+                    txCurrentPage = i;
+                    fetchTransactions();
+                });
+                container.appendChild(btn);
+            }
+            
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    const dots = document.createElement('span');
+                    dots.innerText = '...';
+                    dots.style.alignSelf = 'center';
+                    dots.style.color = 'var(--text-muted)';
+                    dots.style.margin = '0 4px';
+                    container.appendChild(dots);
+                }
+                
+                const btnLast = document.createElement('button');
+                btnLast.className = 'btn-page';
+                btnLast.innerText = totalPages;
+                btnLast.addEventListener('click', () => { txCurrentPage = totalPages; fetchTransactions(); });
+                container.appendChild(btnLast);
+            }
+            
+            // Next button
+            const btnNext = document.createElement('button');
+            btnNext.className = 'btn-page';
+            btnNext.innerHTML = '<i class="fa-solid fa-angle-right"></i>';
+            btnNext.disabled = txCurrentPage === totalPages;
+            btnNext.addEventListener('click', () => {
+                if (txCurrentPage < totalPages) {
+                    txCurrentPage++;
+                    fetchTransactions();
+                }
+            });
+            container.appendChild(btnNext);
+        }
+
+        // Chart Rendering Logic using ApexCharts
+        function renderTrendChart(trendData) {
+            const dates = trendData.map(d => new Date(d.date).toLocaleDateString('tr-TR', {day: '2-digit', month: '2-digit'}));
+            const revenues = trendData.map(d => d.revenue);
+            const quantities = trendData.map(d => d.qty);
+            
+            const options = {
+                series: [
+                    {
+                        name: 'Satış Geliri (€)',
+                        type: 'area',
+                        data: revenues
+                    },
+                    {
+                        name: 'Satış Miktarı (Adet)',
+                        type: 'column',
+                        data: quantities
+                    }
+                ],
+                chart: {
+                    height: 350,
+                    type: 'line',
+                    toolbar: { show: false },
+                    background: 'transparent',
+                    foreColor: '#9ca3af'
+                },
+                colors: ['#3b82f6', 'rgba(16, 185, 129, 0.45)'],
+                stroke: {
+                    width: [3, 0],
+                    curve: 'smooth'
+                },
+                fill: {
+                    type: ['gradient', 'solid'],
+                    gradient: {
+                        shadeIntensity: 1,
+                        opacityFrom: 0.35,
+                        opacityTo: 0.05,
+                        stops: [0, 90, 100]
+                    }
+                },
+                theme: { mode: 'dark' },
+                grid: {
+                    borderColor: 'rgba(255, 255, 255, 0.05)',
+                    strokeDashArray: 4,
+                    xaxis: { lines: { show: false } }
+                },
+                xaxis: {
+                    categories: dates,
+                    axisBorder: { show: false },
+                    axisTicks: { show: false }
+                },
+                yaxis: [
+                    {
+                        title: { text: 'Gelir (€)', style: { color: '#3b82f6', fontWeight: 600 } },
+                        labels: { formatter: (val) => '€' + val.toFixed(0) }
+                    },
+                    {
+                        opposite: true,
+                        title: { text: 'Miktar (Adet)', style: { color: '#10b981', fontWeight: 600 } },
+                        labels: { formatter: (val) => val.toFixed(0) }
+                    }
+                ],
+                tooltip: {
+                    shared: true,
+                    intersect: false,
+                    y: {
+                        formatter: function (y, { seriesIndex }) {
+                            if (typeof y !== "undefined") {
+                                return seriesIndex === 0 ? `€${y.toLocaleString('en-US', {minimumFractionDigits: 2})}` : `${y.toLocaleString('tr-TR')} Adet`;
+                            }
+                            return y;
+                        }
+                    }
+                },
+                legend: {
+                    position: 'top',
+                    horizontalAlign: 'right',
+                    offsetY: -10
+                }
+            };
+
+            if (trendChartObj) {
+                trendChartObj.updateOptions(options);
+            } else {
+                trendChartObj = new ApexCharts(document.querySelector("#trendChart"), options);
+                trendChartObj.render();
+            }
+        }
+
+        function renderDeptChart(departments) {
+            const chartDom = document.getElementById('deptChart');
+            if (!chartDom) return;
+            
+            if (chartDom.clientWidth === 0) return;
+            
+            if (deptChartObj) {
+                deptChartObj.dispose();
+                deptChartObj = null;
+            }
+
+            const activeDepts = (departments || []).filter(d => (d.revenue || 0) > 0);
+            if (activeDepts.length === 0) {
+                chartDom.innerHTML = `<div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100%; color:#9ca3af; font-size:13px; font-weight:500; gap:8px;">
+                    <i class="fa-solid fa-chart-pie" style="font-size:24px; color:#4b5563;"></i>
+                    <span>Seçilen tarihte departman satışı bulunmamaktadır.</span>
+                </div>`;
+                return;
+            }
+
+            deptChartObj = echarts.init(chartDom, 'dark');
+            
+            const isMobile = window.innerWidth <= 768;
+            const data = activeDepts.map(d => ({ value: d.revenue, name: d.department }));
+            const totalSum = activeDepts.reduce((acc, d) => acc + (d.revenue || 0), 0);
+            
+            const option = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'item',
+                    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                    borderColor: 'rgba(255, 255, 255, 0.1)',
+                    padding: [8, 12],
+                    textStyle: { color: '#ffffff', fontSize: 12 },
+                    formatter: function(params) {
+                        return `<div style="font-weight:700; color:#38bdf8; margin-bottom:4px;">${params.name}</div>` +
+                               `<div>Gelir: <b style="color:#ffffff;">€${params.value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b></div>` +
+                               `<div>Oran: <b style="color:#10b981;">%${params.percent.toFixed(1)}</b></div>`;
+                    }
+                },
+                title: {
+                    text: 'Toplam Gelir',
+                    subtext: '€' + Math.round(totalSum).toLocaleString('en-US'),
+                    left: 'center',
+                    top: isMobile ? '35%' : '38%',
+                    textStyle: { fontSize: isMobile ? 11 : 12, color: '#9ca3af', fontWeight: 'normal' },
+                    subtextStyle: { fontSize: isMobile ? 20 : 24, color: '#ffffff', fontWeight: 'bold' }
+                },
+                legend: {
+                    type: 'scroll',
+                    orient: 'horizontal',
+                    left: 'center',
+                    bottom: 0,
+                    height: 25,
+                    textStyle: { color: '#9ca3af', fontSize: 10 },
+                    pageIconColor: '#06b6d4',
+                    pageIconInactiveColor: '#4b5563',
+                    pageTextStyle: { color: '#9ca3af' },
+                    icon: 'circle'
+                },
+                series: [{
+                    name: 'Departman',
+                    type: 'pie',
+                    radius: isMobile ? ['42%', '65%'] : ['55%', '82%'],
+                    center: ['50%', '42%'],
+                    avoidLabelOverlap: true,
+                    itemStyle: { borderRadius: 6, borderColor: '#0b0f19', borderWidth: 2 },
+                    color: ['#f59e0b', '#8b5cf6', '#10b981', '#06b6d4', '#ec4899', '#3b82f6'],
+                    label: { show: false },
+                    labelLine: { show: false },
+                    emphasis: {
+                        scale: true,
+                        scaleSize: 6,
+                        itemStyle: {
+                            shadowBlur: 12,
+                            shadowColor: 'rgba(0, 0, 0, 0.6)'
+                        }
+                    },
+                    data: data
+                }]
+            };
+            
+            deptChartObj.setOption(option);
+            
+            deptChartObj.off('legendselectchanged');
+            deptChartObj.on('legendselectchanged', function (params) {
+                const selectedMap = params.selected;
+                let newSum = 0;
+                data.forEach(item => {
+                    if (selectedMap[item.name] !== false) {
+                        newSum += (item.value || 0);
+                    }
+                });
+                deptChartObj.setOption({
+                    title: {
+                        subtext: '€' + Math.round(newSum).toLocaleString('en-US')
+                    }
+                });
+            });
+        }
+
+        function renderCategoryChart(categories) {
+            // Sort categories by revenue desc
+            categories.sort((a,b) => b.revenue - a.revenue);
+            const labels = categories.map(c => c.category);
+            const revenues = categories.map(c => c.revenue);
+            
+            const options = {
+                series: [{
+                    name: 'Gelir (€)',
+                    data: revenues
+                }],
+                chart: {
+                    type: 'bar',
+                    height: 280,
+                    toolbar: { show: false },
+                    background: 'transparent',
+                    foreColor: '#9ca3af'
+                },
+                plotOptions: {
+                    bar: {
+                        horizontal: true,
+                        barHeight: '60%',
+                        borderRadius: 4
+                    },
+                },
+                theme: { mode: 'dark' },
+                colors: ['#3b82f6'],
+                xaxis: {
+                    categories: labels,
+                    axisBorder: { show: false },
+                    axisTicks: { show: false },
+                    labels: {
+                        formatter: (val) => '€' + val.toLocaleString('en-US')
+                    }
+                },
+                grid: {
+                    borderColor: 'rgba(255, 255, 255, 0.05)',
+                    strokeDashArray: 4
+                },
+                tooltip: {
+                    y: {
+                        formatter: (val) => `€${val.toLocaleString('en-US', {minimumFractionDigits: 2})}`
+                    }
+                }
+            };
+
+            if (catChartObj) {
+                catChartObj.updateOptions(options);
+            } else {
+                catChartObj = new ApexCharts(document.querySelector("#catChart"), options);
+                catChartObj.render();
+            }
+        }
+
+        function renderOccPosChart(forecastData) {
+            const dates = forecastData.map(d => new Date(d.date).toLocaleDateString('tr-TR', {day: '2-digit', month: '2-digit'}));
+            const occs = forecastData.map(d => d.occ_percent);
+            const revenues = forecastData.map(d => d.pos_revenue);
+            
+            const options = {
+                series: [
+                    {
+                        name: 'Doluluk Oranı (%)',
+                        type: 'line',
+                        data: occs
+                    },
+                    {
+                        name: 'POS Satış Geliri (€)',
+                        type: 'area',
+                        data: revenues
+                    }
+                ],
+                chart: {
+                    height: 380,
+                    type: 'line',
+                    toolbar: { show: false },
+                    background: 'transparent',
+                    foreColor: '#9ca3af'
+                },
+                colors: ['#8b5cf6', '#3b82f6'], // Occ = Violet, POS = Blue
+                stroke: {
+                    width: [4, 3],
+                    curve: 'smooth'
+                },
+                fill: {
+                    type: ['solid', 'gradient'],
+                    gradient: {
+                        shadeIntensity: 1,
+                        opacityFrom: 0.3,
+                        opacityTo: 0.02,
+                        stops: [0, 90, 100]
+                    }
+                },
+                theme: { mode: 'dark' },
+                grid: {
+                    borderColor: 'rgba(255, 255, 255, 0.05)',
+                    strokeDashArray: 4
+                },
+                xaxis: {
+                    categories: dates,
+                    axisBorder: { show: false }
+                },
+                yaxis: [
+                    {
+                        title: { text: 'Doluluk Oranı (%)', style: { color: '#8b5cf6', fontWeight: 600 } },
+                        labels: { formatter: (val) => val.toFixed(0) + '%' },
+                        min: 0,
+                        max: 100
+                    },
+                    {
+                        opposite: true,
+                        title: { text: 'POS Gelir (€)', style: { color: '#3b82f6', fontWeight: 600 } },
+                        labels: { formatter: (val) => '€' + val.toLocaleString('en-US') }
+                    }
+                ],
+                tooltip: {
+                    shared: true,
+                    intersect: false,
+                    y: {
+                        formatter: function (y, { seriesIndex }) {
+                            if (typeof y !== "undefined") {
+                                return seriesIndex === 0 ? `${y.toFixed(1)}%` : `€${y.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+                            }
+                            return y;
+                        }
+                    }
+                },
+                legend: {
+                    position: 'top',
+                    horizontalAlign: 'right',
+                    offsetY: -10
+                }
+            };
+
+            if (occPosChartObj) {
+                occPosChartObj.updateOptions(options);
+            } else {
+                occPosChartObj = new ApexCharts(document.querySelector("#occPosChart"), options);
+                occPosChartObj.render();
+            }
+        }
+
+        // Export Detailed Transactions to Excel
+        async function exportTransactionsTable() {
+            showLoader("İşlem verileri Excel'e aktarılıyor...");
+            try {
+                const start = document.getElementById('startDate').value;
+                const end = document.getElementById('endDate').value;
+                const dept = document.getElementById('filterDept').value;
+                const cat = document.getElementById('filterCat').value;
+                const search = document.getElementById('txSearch').value;
+                
+                // Fetch all matching records without pagination for export (use page limit 1,000,000)
+                const response = await fetch(`/api/pos-transactions?start=${start}&end=${end}&department=${encodeURIComponent(dept)}&category=${encodeURIComponent(cat)}&search=${encodeURIComponent(search)}&page=1&limit=1000000`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                // Format data for Excel
+                const excelData = data.transactions.map(tx => ({
+                    'Oda No': tx.room,
+                    'Folio ID': tx.folio_id,
+                    'Misafir Adı': tx.guest_name,
+                    'Satış Tipi': tx.sale_type,
+                    'Tarih': tx.date,
+                    'Saat': tx.time,
+                    'Departman': tx.department,
+                    'Kategori': tx.category,
+                    'Ürün Adı': tx.product_name,
+                    'Adisyon No': tx.check_no,
+                    'Miktar': tx.qty,
+                    'Birim Fiyat (€)': tx.unit_price,
+                    'Net Tutar (€)': tx.price_eur,
+                    'Tutar (TL)': tx.local_amount,
+                    'Adisyon ID (POS)': tx.rec_id
+                }));
+                
+                const worksheet = XLSX.utils.json_to_sheet(excelData);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, "POS Detayli Satis");
+                
+                // Auto-fit columns
+                const max_len = excelData.reduce((acc, next) => {
+                    Object.keys(next).forEach(key => {
+                        const val = next[key] ? next[key].toString() : '';
+                        acc[key] = Math.max(acc[key] || 0, val.length, key.length);
+                    });
+                    return acc;
+                }, {});
+                worksheet['!cols'] = Object.keys(max_len).map(k => ({ wch: max_len[k] + 2 }));
+                
+                XLSX.writeFile(workbook, `POS_Detayli_Satis_Raporu_${start}_${end}.xlsx`);
+            } catch (err) {
+                alert("Excel dışa aktarma hatası: " + err.message);
+            } finally {
+                hideLoader();
+            }
+        }
+
+        // Export Forecast Comparison to Excel
+        function exportForecastTable() {
+            if (allForecastData.length === 0) {
+                alert("Aktarılacak veri bulunamadı.");
+                return;
+            }
+            
+            showLoader("Karşılaştırma verileri Excel'e aktarılıyor...");
+            try {
+                const start = document.getElementById('startDate').value;
+                const end = document.getElementById('endDate').value;
+                
+                const excelData = allForecastData.map(row => {
+                    const spendPerRoom = row.sold > 0 ? (row.pos_revenue / row.sold) : 0;
+                    const spendPerPax = row.total_pax > 0 ? (row.pos_revenue / row.total_pax) : 0;
+                    return {
+                        'Tarih': row.date,
+                        'Kapasite': row.capacity,
+                        'Satılan Oda': row.sold,
+                        'Boş Oda': row.difference,
+                        'Doluluk Oranı (%)': row.occ_percent,
+                        'Yetişkin': row.adult,
+                        'Çocuk': row.paid_child + row.free_child,
+                        'Bebek': row.baby,
+                        'Toplam Pax': row.total_pax,
+                        'Giriş Yapan Oda': row.cin_room,
+                        'Çıkış Yapan Oda': row.cout_room,
+                        'POS Satış Tutarı (€)': row.pos_revenue,
+                        'Oda Başı Harcama (€)': spendPerRoom,
+                        'Pax Başı Harcama (€)': spendPerPax
+                    };
+                });
+                
+                const worksheet = XLSX.utils.json_to_sheet(excelData);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, "Doluluk ve POS Analiz");
+                
+                // Auto-fit columns
+                const max_len = excelData.reduce((acc, next) => {
+                    Object.keys(next).forEach(key => {
+                        const val = next[key] ? next[key].toString() : '';
+                        acc[key] = Math.max(acc[key] || 0, val.length, key.length);
+                    });
+                    return acc;
+                }, {});
+                worksheet['!cols'] = Object.keys(max_len).map(k => ({ wch: max_len[k] + 2 }));
+                
+                XLSX.writeFile(workbook, `Doluluk_POS_Karsilastirma_Raporu_${start}_${end}.xlsx`);
+            } catch (err) {
+                alert("Excel dışa aktarma hatası: " + err.message);
+            } finally {
+                hideLoader();
+            }
+        }
+        // Fetch Activities & Load Activity Dashboard
+        async function fetchActivities() {
+            const start = document.getElementById('startDate').value;
+            const end = document.getElementById('endDate').value;
+            
+            const response = await fetch(`/api/pos-activities?start=${start}&end=${end}`);
+            allActivityData = await response.json();
+            
+            if (allActivityData.error) {
+                throw new Error(allActivityData.error);
+            }
+            
+            const kpis = allActivityData.kpis;
+            const monthly = allActivityData.monthly;
+            const products = allActivityData.products;
+            
+            // Populate Activity KPIs
+            document.getElementById('act-kpi-revenue').innerText = '€' + kpis.total_eur.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            document.getElementById('act-kpi-revenue-try').innerText = '₺' + kpis.total_local.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            document.getElementById('act-kpi-qty').innerText = kpis.total_qty.toLocaleString('tr-TR');
+            document.getElementById('act-kpi-checks').innerText = kpis.total_checks.toLocaleString('tr-TR');
+            
+            if (products.length > 0) {
+                const topEl = document.getElementById('act-kpi-top');
+                topEl.innerText = products[0].product_name;
+                topEl.title = products[0].product_name;
+                document.getElementById('act-kpi-top-revenue').innerText = '€' + products[0].revenue_eur.toLocaleString('en-US', { minimumFractionDigits: 2 }) + ' (' + products[0].qty + ' adet)';
+            } else {
+                document.getElementById('act-kpi-top').innerText = '-';
+                document.getElementById('act-kpi-top-revenue').innerText = '€0.00 gelir';
+            }
+            
+            // Render Monthly Table
+            const mBody = document.getElementById('actMonthlyTableBody');
+            mBody.innerHTML = '';
+            
+            if (monthly.length === 0) {
+                mBody.innerHTML = `<tr><td colspan="6" class="text-center" style="color: var(--text-muted); padding: 2rem;">Seçilen tarih aralığında aktivite satışı bulunamadı.</td></tr>`;
+            } else {
+                let totChecks = 0, totQty = 0, totEur = 0, totLocal = 0;
+                
+                monthly.forEach(row => {
+                    totChecks += row.checks;
+                    totQty += row.qty;
+                    totEur += row.revenue_eur;
+                    totLocal += row.revenue_local;
+                    
+                    const [y, m] = row.month.split('-');
+                    const dateObj = new Date(parseInt(y), parseInt(m) - 1, 1);
+                    const monthName = dateObj.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
+                    const avgCheck = row.checks > 0 ? (row.revenue_eur / row.checks) : 0;
+                    
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="text-num" style="font-weight: 700; color: white;">${monthName} (${row.month})</td>
+                        <td class="text-center text-num">${row.checks.toLocaleString('tr-TR')}</td>
+                        <td class="text-center text-num" style="color: var(--accent-green); font-weight: 700;">${row.qty.toLocaleString('tr-TR')}</td>
+                        <td class="text-right text-num" style="font-weight: 700; color: var(--accent-primary);">€${row.revenue_eur.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td class="text-right text-num" style="color: var(--accent-green);">₺${row.revenue_local.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td class="text-right text-num">€${avgCheck.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    `;
+                    mBody.appendChild(tr);
+                });
+                
+                // Add Total Row
+                const trTot = document.createElement('tr');
+                trTot.style.background = 'rgba(255, 255, 255, 0.05)';
+                trTot.style.fontWeight = 'bold';
+                const avgTotCheck = totChecks > 0 ? (totEur / totChecks) : 0;
+                trTot.innerHTML = `
+                    <td style="color: #06b6d4; font-weight: 800;">GENEL TOPLAM</td>
+                    <td class="text-center text-num" style="color: white;">${totChecks.toLocaleString('tr-TR')}</td>
+                    <td class="text-center text-num" style="color: var(--accent-green); font-weight: 800;">${totQty.toLocaleString('tr-TR')}</td>
+                    <td class="text-right text-num" style="color: var(--accent-primary); font-weight: 800;">€${totEur.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    <td class="text-right text-num" style="color: var(--accent-green); font-weight: 800;">₺${totLocal.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    <td class="text-right text-num" style="color: white;">€${avgTotCheck.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                `;
+                mBody.appendChild(trTot);
+            }
+            
+            // Render Products Table
+            const pBody = document.getElementById('actProductsTableBody');
+            pBody.innerHTML = '';
+            
+            if (products.length === 0) {
+                pBody.innerHTML = `<tr><td colspan="6" class="text-center" style="color: var(--text-muted); padding: 2rem;">Aktivite ürün satışı bulunamadı.</td></tr>`;
+            } else {
+                products.forEach(p => {
+                    const share = kpis.total_eur > 0 ? ((p.revenue_eur / kpis.total_eur) * 100) : 0;
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td style="font-weight: 600; color: white;">${p.product_name}</td>
+                        <td class="text-center text-num">${p.checks.toLocaleString('tr-TR')}</td>
+                        <td class="text-center text-num" style="font-weight: 700; color: var(--accent-green);">${p.qty.toLocaleString('tr-TR')}</td>
+                        <td class="text-right text-num" style="font-weight: 700; color: var(--accent-primary);">€${p.revenue_eur.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td class="text-right text-num" style="color: var(--accent-green);">₺${p.revenue_local.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td class="text-right text-num" style="font-weight: 700; color: #8b5cf6;">%${share.toFixed(1)}</td>
+                    `;
+                    pBody.appendChild(tr);
+                });
+            }
+            
+            // Render Charts
+            renderActMonthlyChart(monthly);
+            renderActProductChart(products);
+        }
+
+        // Render Monthly Activity Chart
+        function renderActMonthlyChart(monthly) {
+            const months = monthly.map(m => {
+                const [y, mStr] = m.month.split('-');
+                const d = new Date(parseInt(y), parseInt(mStr) - 1, 1);
+                return d.toLocaleDateString('tr-TR', { month: 'short', year: '2-digit' });
+            });
+            const revenues = monthly.map(m => m.revenue_eur);
+            const quantities = monthly.map(m => m.qty);
+            
+            const options = {
+                series: [
+                    { name: 'Aktivite Geliri (€)', type: 'area', data: revenues },
+                    { name: 'Satılan Adet', type: 'line', data: quantities }
+                ],
+                chart: {
+                    height: 350,
+                    type: 'line',
+                    toolbar: { show: false },
+                    background: 'transparent',
+                    foreColor: '#9ca3af'
+                },
+                colors: ['#06b6d4', '#10b981'],
+                stroke: { width: [3, 3], curve: 'smooth' },
+                fill: {
+                    type: ['gradient', 'solid'],
+                    gradient: {
+                        shade: 'dark',
+                        type: 'vertical',
+                        shadeIntensity: 0.5,
+                        opacityFrom: 0.45,
+                        opacityTo: 0.05,
+                        stops: [0, 100]
+                    }
+                },
+                markers: {
+                    size: 6,
+                    strokeWidth: 2,
+                    hover: { size: 8 }
+                },
+                theme: { mode: 'dark' },
+                grid: {
+                    borderColor: 'rgba(255, 255, 255, 0.05)',
+                    strokeDashArray: 4
+                },
+                xaxis: { categories: months },
+                yaxis: [
+                    {
+                        title: { text: 'Gelir (€)', style: { color: '#06b6d4', fontWeight: 600 } },
+                        labels: { formatter: (val) => '€' + (val !== undefined ? val.toLocaleString('en-US', {maximumFractionDigits: 0}) : 0) }
+                    },
+                    {
+                        opposite: true,
+                        title: { text: 'Miktar (Adet)', style: { color: '#10b981', fontWeight: 600 } },
+                        labels: { formatter: (val) => val !== undefined ? val.toLocaleString('tr-TR') : 0 }
+                    }
+                ],
+                tooltip: {
+                    shared: true,
+                    intersect: false,
+                    y: {
+                        formatter: function (y, { seriesIndex }) {
+                            if (typeof y !== "undefined") {
+                                return seriesIndex === 0 ? `€${y.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : `${y.toLocaleString('tr-TR')} Adet`;
+                            }
+                            return y;
+                        }
+                    }
+                }
+            };
+            
+            if (actMonthlyChartObj) {
+                actMonthlyChartObj.updateOptions(options);
+            } else {
+                actMonthlyChartObj = new ApexCharts(document.querySelector("#actMonthlyChart"), options);
+                actMonthlyChartObj.render();
+            }
+        }
+
+        // Render Product Activity Chart (Horizontal Bar Chart)
+        function renderActProductChart(products) {
+            const chartDom = document.querySelector('#actProductChart');
+            if (!chartDom) return;
+
+            if (actProductChartObj && actProductChartObj.destroy) {
+                actProductChartObj.destroy();
+                actProductChartObj = null;
+            }
+
+            const activeProducts = (products || []).filter(p => (p.revenue_eur || 0) > 0);
+            if (activeProducts.length === 0) {
+                chartDom.innerHTML = `<div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100%; color:#9ca3af; font-size:13px; font-weight:500; gap:8px;">
+                    <i class="fa-solid fa-chart-bar" style="font-size:24px; color:#4b5563;"></i>
+                    <span>Seçilen tarihte aktivite satışı bulunmamaktadır.</span>
+                </div>`;
+                return;
+            }
+
+            chartDom.innerHTML = '';
+
+            const isMobile = window.innerWidth <= 768;
+            const sortedProducts = activeProducts.sort((a, b) => (b.revenue_eur || 0) - (a.revenue_eur || 0));
+            const topProducts = sortedProducts.slice(0, 8);
+
+            const zeroData = topProducts.map(() => 0);
+            const realData = topProducts.map(p => Math.round(p.revenue_eur || 0));
+
+            const options = {
+                series: [{
+                    name: 'Gelir (€)',
+                    data: zeroData
+                }],
+                chart: {
+                    type: 'bar',
+                    height: isMobile ? 320 : 350,
+                    toolbar: { show: false },
+                    animations: {
+                        enabled: true,
+                        easing: 'easeinout',
+                        speed: 800,
+                        dynamicAnimation: {
+                            enabled: true,
+                            speed: 600
+                        }
+                    }
+                },
+                plotOptions: {
+                    bar: {
+                        horizontal: true,
+                        barHeight: isMobile ? '58%' : '52%',
+                        borderRadius: 4,
+                        distributed: true,
+                        dataLabels: {
+                            position: 'top'
+                        }
+                    }
+                },
+                colors: ['#06b6d4', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#3b82f6', '#14b8a6', '#a855f7'],
+                dataLabels: {
+                    enabled: true,
+                    style: {
+                        colors: ['#ffffff'],
+                        fontSize: isMobile ? '10px' : '11px',
+                        fontFamily: 'Inter, sans-serif',
+                        fontWeight: 700
+                    },
+                    formatter: function(val) {
+                        return val > 0 ? '€' + val.toLocaleString('en-US') : '';
+                    },
+                    offsetX: 10
+                },
+                xaxis: {
+                    categories: topProducts.map(p => p.product_name),
+                    labels: {
+                        show: true,
+                        style: { colors: '#9ca3af', fontSize: '9px' },
+                        formatter: (v) => '€' + v.toLocaleString()
+                    },
+                    axisBorder: { show: false }
+                },
+                yaxis: {
+                    labels: {
+                        show: true,
+                        style: { colors: '#e2e8f0', fontSize: isMobile ? '10px' : '11px', fontWeight: 600 },
+                        maxWidth: isMobile ? 120 : 240
+                    }
+                },
+                grid: {
+                    borderColor: 'rgba(255, 255, 255, 0.05)',
+                    strokeDashArray: 3,
+                    padding: { left: 5, right: 15 }
+                },
+                legend: { show: false },
+                tooltip: {
+                    theme: 'dark',
+                    y: {
+                        formatter: function(val) {
+                            return '€' + val.toLocaleString('en-US', { minimumFractionDigits: 2 });
+                        }
+                    }
+                }
+            };
+
+            actProductChartObj = new ApexCharts(chartDom, options);
+            actProductChartObj.render().then(() => {
+                setTimeout(() => {
+                    if (actProductChartObj && actProductChartObj.updateSeries) {
+                        actProductChartObj.updateSeries([{
+                            name: 'Gelir (€)',
+                            data: realData
+                        }]);
+                    }
+                }, 80);
+            });
+        }
+
+        // Export Activity Monthly Table to Excel
+        function exportActivityMonthlyTable() {
+            if (!allActivityData || !allActivityData.monthly || allActivityData.monthly.length === 0) {
+                alert("Aktarılacak veri bulunamadı.");
+                return;
+            }
+            showLoader("Aylık aktivite verileri Excel'e aktarılıyor...");
+            try {
+                const excelData = allActivityData.monthly.map(row => {
+                    const [y, m] = row.month.split('-');
+                    const dateObj = new Date(parseInt(y), parseInt(m) - 1, 1);
+                    const monthName = dateObj.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
+                    const avgCheck = row.checks > 0 ? (row.revenue_eur / row.checks) : 0;
+                    return {
+                        'Ay / Dönem': monthName,
+                        'Ay Kodu': row.month,
+                        'Adisyon Sayısı': row.checks,
+                        'Satılan Miktar (Adet)': row.qty,
+                        'Toplam Gelir (€)': row.revenue_eur,
+                        'Toplam Gelir (TL)': row.revenue_local,
+                        'Ortalama Adisyon (€)': roundTo2(avgCheck)
+                    };
+                });
+                
+                const worksheet = XLSX.utils.json_to_sheet(excelData);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, "Aylik Su Sporlari Geliri");
+                
+                const max_len = excelData.reduce((acc, next) => {
+                    Object.keys(next).forEach(key => {
+                        const val = next[key] ? next[key].toString() : '';
+                        acc[key] = Math.max(acc[key] || 0, val.length, key.length);
+                    });
+                    return acc;
+                }, {});
+                worksheet['!cols'] = Object.keys(max_len).map(k => ({ wch: max_len[k] + 2 }));
+                
+                XLSX.writeFile(workbook, `Su_Sporlari_Aylik_Gelir_Raporu.xlsx`);
+            } catch (err) {
+                alert("Excel dışa aktarma hatası: " + err.message);
+            } finally {
+                hideLoader();
+            }
+        }
+
+        // Export Activity Products Table to Excel
+        function exportActivityProductsTable() {
+            if (!allActivityData || !allActivityData.products || allActivityData.products.length === 0) {
+                alert("Aktarılacak ürün verisi bulunamadı.");
+                return;
+            }
+            showLoader("Ürün bazlı aktivite verileri Excel'e aktarılıyor...");
+            try {
+                const totalEur = allActivityData.kpis.total_eur;
+                const excelData = allActivityData.products.map(p => ({
+                    'Ürün / Aktivite Adı': p.product_name,
+                    'Adisyon Sayısı': p.checks,
+                    'Satılan Miktar (Adet)': p.qty,
+                    'Toplam Gelir (€)': p.revenue_eur,
+                    'Toplam Gelir (TL)': p.revenue_local,
+                    'Pay (%)': totalEur > 0 ? roundTo2((p.revenue_eur / totalEur) * 100) : 0
+                }));
+                
+                const worksheet = XLSX.utils.json_to_sheet(excelData);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, "Aktivite Urun Performans");
+                
+                const max_len = excelData.reduce((acc, next) => {
+                    Object.keys(next).forEach(key => {
+                        const val = next[key] ? next[key].toString() : '';
+                        acc[key] = Math.max(acc[key] || 0, val.length, key.length);
+                    });
+                    return acc;
+                }, {});
+                worksheet['!cols'] = Object.keys(max_len).map(k => ({ wch: max_len[k] + 2 }));
+                
+                XLSX.writeFile(workbook, `Su_Sporlari_Urun_Performans_Raporu.xlsx`);
+            } catch (err) {
+                alert("Excel dışa aktarma hatası: " + err.message);
+            } finally {
+                hideLoader();
+            }
+        }
+
+        function roundTo2(num) {
+            return Math.round((num + Number.EPSILON) * 100) / 100;
+        }
+    </script>
+</body>
+</html>
