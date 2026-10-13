@@ -1335,7 +1335,7 @@
             if (window._loaderTimeout) clearTimeout(window._loaderTimeout);
             window._loaderTimeout = setTimeout(() => {
                 hideLoader();
-            }, 4000);
+            }, 30000);
         }
 
         function hideLoader() {
@@ -1384,24 +1384,7 @@
         }
 
         function preloadMonths() {
-            const months = [
-                { start: '2026-09-01', end: '2026-09-30' },
-                { start: '2026-08-01', end: '2026-08-31' },
-                { start: '2026-07-01', end: '2026-07-31' },
-                { start: '2026-06-01', end: '2026-06-30' },
-                { start: '2026-05-01', end: '2026-10-31' }
-            ];
-            
-            setTimeout(() => {
-                months.forEach((m, idx) => {
-                    setTimeout(() => {
-                        cachedFetch(`/api/pos-summary?start=${m.start}&end=${m.end}`);
-                        cachedFetch(`/api/pos-forecast?start=${m.start}&end=${m.end}`);
-                        cachedFetch(`/api/pos-activities?start=${m.start}&end=${m.end}`);
-                        cachedFetch(`/api/pos-transactions?start=${m.start}&end=${m.end}&department=&category=&search=&page=1&limit=100`);
-                    }, idx * 400);
-                });
-            }, 1200);
+            // Disabled automatic background batch flood to maintain maximum SQL responsiveness
         }
 
         // Fetch All Data (Instant if cached)

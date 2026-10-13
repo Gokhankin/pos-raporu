@@ -16,38 +16,27 @@ log = logging.getLogger(__name__)
 
 import sys
 
-# Centralized encrypted config loading
-parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sedna_cloud_dir = os.path.join(parent_dir, 'sedna_cloud_backup')
-if sedna_cloud_dir not in sys.path:
-    sys.path.insert(0, sedna_cloud_dir)
+DB_CONFIG = {
+    "server":   os.getenv("DB_SERVER", "192.168.0.41"),
+    "port":     1433,
+    "database": os.getenv("DB_NAME", "SednaAdakoy"),
+    "username": os.getenv("DB_USER", "gokhan"),
+    "password": os.getenv("DB_PASSWORD", "Ad!!2025!!"),
+}
 
-try:
-    from config import get_db_connection
-    def get_db():
-        return get_db_connection()
-except Exception as e:
-    log.warning(f"Could not load central config: {e}")
-    DB_CONFIG = {
-        "server":   os.getenv("DB_SERVER", "192.168.0.41"),
-        "port":     1433,
-        "database": os.getenv("DB_NAME", "SednaAdakoy"),
-        "username": os.getenv("DB_USER", "gokhan"),
-        "password": os.getenv("DB_PASSWORD", "Ad!!2025!!"),
-    }
-    def get_db():
-        for drv in ["{ODBC Driver 18 for SQL Server}", "{ODBC Driver 17 for SQL Server}", "{SQL Server}"]:
-            try:
-                cs = f"DRIVER={drv};SERVER={DB_CONFIG['server']},{DB_CONFIG['port']};DATABASE={DB_CONFIG['database']};UID={DB_CONFIG['username']};PWD={DB_CONFIG['password']};TrustServerCertificate=yes;Encrypt=no;"
-                return pyodbc.connect(cs, timeout=5)
-            except Exception:
-                continue
-        return None
+def get_db():
+    for drv in ["{ODBC Driver 18 for SQL Server}", "{ODBC Driver 17 for SQL Server}", "{SQL Server}"]:
+        try:
+            cs = f"DRIVER={drv};SERVER={DB_CONFIG['server']},{DB_CONFIG['port']};DATABASE={DB_CONFIG['database']};UID={DB_CONFIG['username']};PWD={DB_CONFIG['password']};TrustServerCertificate=yes;Encrypt=no;"
+            return pyodbc.connect(cs, timeout=10, autocommit=True)
+        except Exception:
+            continue
+    return None
 
-# In-Memory Cache (TTL = 300s / 5 minutes)
+# In-Memory Cache (TTL = 1800s / 30 minutes)
 API_CACHE = {}
 CACHE_LOCK = Lock()
-CACHE_TTL = 300
+CACHE_TTL = 1800
 
 def get_from_cache(key):
     now = time.time()
@@ -149,6 +138,7 @@ def get_pos_summary():
                     AND corr.Deleted = 0
               )
               AND f.PostDate >= ? AND f.PostDate <= ?
+            OPTION (RECOMPILE)
         """
         cur.execute(sql_kpis, start_date, end_date)
         kpi_row = cur.fetchone()
@@ -184,6 +174,7 @@ def get_pos_summary():
               )
               AND f.PostDate >= ? AND f.PostDate <= ?
             GROUP BY d.DepartName
+            OPTION (RECOMPILE)
         """
         cur.execute(sql_depart, start_date, end_date)
         departs = [{"department": r[0], "qty": float(r[1] or 0), "revenue": round(float(r[2] or 0), 2)} for r in cur.fetchall()]
@@ -212,6 +203,7 @@ def get_pos_summary():
               )
               AND f.PostDate >= ? AND f.PostDate <= ?
             GROUP BY rg.RevenueName
+            OPTION (RECOMPILE)
         """
         cur.execute(sql_revenue, start_date, end_date)
         categories = [{"category": r[0], "qty": float(r[1] or 0), "revenue": round(float(r[2] or 0), 2)} for r in cur.fetchall()]
@@ -240,6 +232,7 @@ def get_pos_summary():
               AND f.PostDate >= ? AND f.PostDate <= ?
             GROUP BY CAST(f.PostDate AS DATE)
             ORDER BY TrendDate ASC
+            OPTION (RECOMPILE)
         """
         cur.execute(sql_trend, start_date, end_date)
         trend = [{"date": str(r[0]), "qty": float(r[1] or 0), "revenue": round(float(r[2] or 0), 2)} for r in cur.fetchall()]
@@ -338,6 +331,7 @@ def get_pos_transactions():
               )
               AND f.PostDate >= ? AND f.PostDate <= ?
               {filter_sql}
+            OPTION (RECOMPILE)
         """
         cur.execute(count_sql, *params)
         total_records = cur.fetchone()[0]
@@ -387,6 +381,7 @@ def get_pos_transactions():
             ORDER BY f.PostDate ASC, f.RecordTime ASC, pd.RecId ASC
             OFFSET {offset} ROWS
             FETCH NEXT {limit} ROWS ONLY
+            OPTION (RECOMPILE)
         """
         cur.execute(data_sql, *params)
         rows = cur.fetchall()
@@ -553,6 +548,7 @@ def get_pos_forecast():
               )
               AND f.PostDate >= ? AND f.PostDate <= ?
             GROUP BY CAST(f.PostDate AS DATE)
+            OPTION (RECOMPILE)
         """
         cur.execute(sql_pos, start_date, end_date)
         for r in cur.fetchall():
@@ -623,7 +619,7 @@ def get_pos_activities():
         # Single fast query for all activity transactions
         sql_all_activities = f"""
             SELECT 
-                FORMAT(f.PostDate, 'yyyy-MM') as MonthStr,
+                CONVERT(VARCHAR(7), f.PostDate, 120) as MonthStr,
                 p.Remark as ProductName,
                 pd.SummaryId,
                 pd.Amount as Qty,
@@ -645,6 +641,7 @@ def get_pos_activities():
                     AND corr.Deleted = 0
               )
               {date_cond}
+            OPTION (RECOMPILE)
         """
         cur.execute(sql_all_activities, *params)
         rows = cur.fetchall()
