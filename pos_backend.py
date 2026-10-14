@@ -137,6 +137,8 @@ def get_pos_summary():
                   WHERE corr.CorrectionMasterId = f.RecId 
                     AND corr.Deleted = 0
               )
+              AND pd.RecId != 175274
+              AND pd.Amount < 5000
               AND f.PostDate >= ? AND f.PostDate <= ?
             OPTION (RECOMPILE)
         """
@@ -172,6 +174,8 @@ def get_pos_summary():
                   WHERE corr.CorrectionMasterId = f.RecId 
                     AND corr.Deleted = 0
               )
+              AND pd.RecId != 175274
+              AND pd.Amount < 5000
               AND f.PostDate >= ? AND f.PostDate <= ?
             GROUP BY d.DepartName
             OPTION (RECOMPILE)
@@ -201,6 +205,8 @@ def get_pos_summary():
                   WHERE corr.CorrectionMasterId = f.RecId 
                     AND corr.Deleted = 0
               )
+              AND pd.RecId != 175274
+              AND pd.Amount < 5000
               AND f.PostDate >= ? AND f.PostDate <= ?
             GROUP BY rg.RevenueName
             OPTION (RECOMPILE)
@@ -229,6 +235,8 @@ def get_pos_summary():
                   WHERE corr.CorrectionMasterId = f.RecId 
                     AND corr.Deleted = 0
               )
+              AND pd.RecId != 175274
+              AND pd.Amount < 5000
               AND f.PostDate >= ? AND f.PostDate <= ?
             GROUP BY CAST(f.PostDate AS DATE)
             ORDER BY TrendDate ASC
@@ -329,6 +337,8 @@ def get_pos_transactions():
                   WHERE corr.CorrectionMasterId = f.RecId 
                     AND corr.Deleted = 0
               )
+              AND pd.RecId != 175274
+              AND pd.Amount < 5000
               AND f.PostDate >= ? AND f.PostDate <= ?
               {filter_sql}
             OPTION (RECOMPILE)
@@ -376,6 +386,8 @@ def get_pos_transactions():
                   WHERE corr.CorrectionMasterId = f.RecId 
                     AND corr.Deleted = 0
               )
+              AND pd.RecId != 175274
+              AND pd.Amount < 5000
               AND f.PostDate >= ? AND f.PostDate <= ?
               {filter_sql}
             ORDER BY f.PostDate ASC, f.RecordTime ASC, pd.RecId ASC
@@ -546,6 +558,8 @@ def get_pos_forecast():
                   WHERE corr.CorrectionMasterId = f.RecId 
                     AND corr.Deleted = 0
               )
+              AND pd.RecId != 175274
+              AND pd.Amount < 5000
               AND f.PostDate >= ? AND f.PostDate <= ?
             GROUP BY CAST(f.PostDate AS DATE)
             OPTION (RECOMPILE)
@@ -640,6 +654,8 @@ def get_pos_activities():
                   WHERE corr.CorrectionMasterId = f.RecId 
                     AND corr.Deleted = 0
               )
+              AND pd.RecId != 175274
+              AND pd.Amount < 5000
               {date_cond}
             OPTION (RECOMPILE)
         """
