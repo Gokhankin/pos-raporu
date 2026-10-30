@@ -1192,6 +1192,7 @@
         const txPageLimit = 100;
         let allForecastData = [];
         let allActivityData = null;
+        const clientCache = new Map();
 
         function initDefaultDates() {
             const now = new Date();
@@ -1368,8 +1369,6 @@
             }
         }
 
-        // Client-side in-memory cache
-        const clientCache = new Map();
 
         async function cachedFetch(url, useCache = true) {
             if (useCache && clientCache.has(url)) {
